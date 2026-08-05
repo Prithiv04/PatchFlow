@@ -1,0 +1,21 @@
+import { jsx as _jsx, jsxs as _jsxs, Fragment as _Fragment } from "react/jsx-runtime";
+import { NavLink } from "react-router-dom";
+import { LayoutDashboard, Video, FileCode2, BarChart3, History, Layers, ChevronLeft, ChevronRight, Settings } from "lucide-react";
+import { motion } from "framer-motion";
+import { useDashboardStore } from "@/store/useDashboardStore";
+const navItems = [
+    { to: "/", label: "Dashboard", icon: LayoutDashboard },
+    { to: "/videos", label: "Videos", icon: Video },
+    { to: "/patches", label: "Patches", icon: FileCode2 },
+    { to: "/reports", label: "Reports", icon: BarChart3 },
+    { to: "/history", label: "History", icon: History },
+];
+export default function AppSidebar() {
+    const { sidebarOpen, toggleSidebar, setMobileMenuOpen } = useDashboardStore();
+    return (_jsxs("aside", { className: `fixed top-0 left-0 bottom-0 z-40 glass-sidebar flex flex-col transition-all duration-300 ${sidebarOpen ? "w-60" : "w-18"}`, children: [_jsxs("div", { className: "h-16 flex items-center justify-between px-4 border-b border-border/50", children: [_jsxs("div", { className: "flex items-center gap-3 overflow-hidden", children: [_jsx("div", { className: "w-9 h-9 rounded-xl bg-gradient-to-br from-primary to-purple-600 flex items-center justify-center text-white shadow-glow shrink-0", children: _jsx(Layers, { className: "w-5 h-5" }) }), sidebarOpen && (_jsx(motion.div, { initial: { opacity: 0 }, animate: { opacity: 1 }, exit: { opacity: 0 }, className: "flex flex-col", children: _jsxs("span", { className: "font-bold text-base text-text tracking-tight flex items-center gap-1.5", children: ["PatchFlow", _jsx("span", { className: "text-[10px] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded bg-primary/20 text-primary border border-primary/30", children: "PRO" })] }) }))] }), _jsx("button", { onClick: toggleSidebar, className: "hidden md:flex p-1.5 rounded-lg text-muted hover:text-text hover:bg-surface border border-transparent hover:border-border transition-all", title: sidebarOpen ? "Collapse sidebar" : "Expand sidebar", children: sidebarOpen ? _jsx(ChevronLeft, { className: "w-4 h-4" }) : _jsx(ChevronRight, { className: "w-4 h-4" }) })] }), _jsx("nav", { className: "flex-1 px-3 py-4 space-y-1.5 overflow-y-auto", children: navItems.map((item) => {
+                    const Icon = item.icon;
+                    return (_jsx(NavLink, { to: item.to, onClick: () => setMobileMenuOpen(false), className: ({ isActive }) => `flex items-center gap-3 px-3 py-2.5 rounded-xl font-medium text-sm transition-all relative ${isActive
+                            ? "bg-primary/15 text-text border border-primary/30 shadow-sm"
+                            : "text-muted hover:text-text hover:bg-white/5 border border-transparent"}`, children: ({ isActive }) => (_jsxs(_Fragment, { children: [_jsx(Icon, { className: `w-5 h-5 shrink-0 ${isActive ? "text-primary" : "text-muted"}` }), sidebarOpen && _jsx("span", { className: "truncate", children: item.label }), isActive && (_jsx(motion.div, { layoutId: "activeIndicator", className: "absolute left-0 top-2 bottom-2 w-1 bg-primary rounded-r-full" }))] })) }, item.to));
+                }) }), _jsx("div", { className: "p-3 border-t border-border/50", children: sidebarOpen ? (_jsxs("div", { className: "glass-card rounded-xl p-3 flex items-center justify-between", children: [_jsxs("div", { className: "flex items-center gap-2.5 overflow-hidden", children: [_jsx("div", { className: "w-8 h-8 rounded-full bg-gradient-to-tr from-purple-500 to-indigo-600 flex items-center justify-center text-xs font-semibold text-white shrink-0", children: "JD" }), _jsxs("div", { className: "truncate", children: [_jsx("p", { className: "text-xs font-medium text-text truncate", children: "Jane Doe" }), _jsx("p", { className: "text-[11px] text-muted truncate", children: "jane@patchflow.io" })] })] }), _jsx("button", { className: "text-muted hover:text-text p-1 rounded hover:bg-white/10 transition", children: _jsx(Settings, { className: "w-4 h-4" }) })] })) : (_jsx("div", { className: "flex justify-center", children: _jsx("div", { className: "w-9 h-9 rounded-full bg-gradient-to-tr from-purple-500 to-indigo-600 flex items-center justify-center text-xs font-semibold text-white", children: "JD" }) })) })] }));
+}

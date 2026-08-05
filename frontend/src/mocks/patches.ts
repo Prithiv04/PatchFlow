@@ -1,0 +1,51 @@
+export interface PatchActivity {
+  id: string;
+  videoTitle: string;
+  patchName: string;
+  action: "applied" | "failed" | "created" | "processing";
+  timestamp: string;
+  author: string;
+}
+
+export const mockPatchActivities: PatchActivity[] = [
+  {
+    id: "patch-1",
+    videoTitle: "Product Overview & Onboarding 2026",
+    patchName: "Updated Pricing Tier Callout",
+    action: "applied",
+    timestamp: "12 mins ago",
+    author: "Jane Doe",
+  },
+  {
+    id: "patch-2",
+    videoTitle: "API Auth Flow Walkthrough",
+    patchName: "Replaced OAuth2 Token Diagram",
+    action: "created",
+    timestamp: "1 hour ago",
+    author: "Alex Rivera",
+  },
+  {
+    id: "patch-3",
+    videoTitle: "Quarterly Financial Analysis Demo",
+    patchName: "Corrected Q3 Revenue Figure Overlay",
+    action: "applied",
+    timestamp: "3 hours ago",
+    author: "Jane Doe",
+  },
+  {
+    id: "patch-4",
+    videoTitle: "UI System Components Overview",
+    patchName: "Audio Sync Adjustment @ 02:15",
+    action: "failed",
+    timestamp: "5 hours ago",
+    author: "System Auto-Patch",
+  },
+  {
+    id: "patch-5",
+    videoTitle: "Enterprise Deployment Guide",
+    patchName: "Subtitles Sync & Logo Swap",
+    action: "applied",
+    timestamp: "Yesterday",
+    author: "Sam Chen",
+  },
+];
