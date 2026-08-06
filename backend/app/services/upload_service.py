@@ -1,10 +1,15 @@
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Optional
+
 from fastapi import UploadFile, HTTPException, status
+from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.logger import logger
+from app.db.models import Video
+from app.db.session import get_db
 from app.schemas.upload import VideoUploadResponse
 from app.utils.file_utils import (
     sanitize_filename,
@@ -18,7 +23,10 @@ CHUNK_SIZE = 1024 * 1024  # 1 MB buffer
 
 class UploadService:
     @staticmethod
-    async def process_video_upload(file: UploadFile) -> VideoUploadResponse:
+    async def process_video_upload(
+        file: UploadFile,
+        db: Optional[Session] = None,
+    ) -> VideoUploadResponse:
         original_name = file.filename or "unnamed_video"
         sanitized_original = sanitize_filename(original_name)
         extension = get_file_extension(original_name)
@@ -96,6 +104,23 @@ class UploadService:
 
         # 7. Generate UTC ISO-8601 timestamp
         timestamp_utc = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
+
+        # 8. Persist Video record to database if session provided
+        if db is not None:
+            video_record = Video(
+                id=video_id,
+                original_filename=sanitized_original,
+                saved_filename=saved_filename,
+                content_type=file.content_type or "application/octet-stream",
+                file_size=file_size,
+                status="uploaded",
+                created_at=now_utc,
+                updated_at=now_utc,
+            )
+            db.add(video_record)
+            db.commit()
+            logger.info("Video record persisted to DB for video_id='%s'", video_id)
 
         logger.info(
             "Upload completed: video_id='%s', saved_filename='%s', size=%d bytes",

@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     transcript_dir: str = "transcripts"
     caption_dir: str = "captions"
     whisper_model_name: str = "base"
+    database_url: str = "sqlite:///./patchflow.db"
 
     model_config = ConfigDict(env_file=".env", env_file_encoding="utf-8")
 

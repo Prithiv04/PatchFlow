@@ -1,4 +1,7 @@
-from fastapi import APIRouter, status
+from fastapi import APIRouter, Depends, status
+from sqlalchemy.orm import Session
+
+from app.db.session import get_db
 from app.schemas.processing import VideoProcessingResponse
 from app.services.processing_service import ProcessingService
 
@@ -11,8 +14,11 @@ router = APIRouter()
     summary="Process an uploaded video",
     description="Extracts video metadata (FFprobe), generates a thumbnail (FFmpeg), and extracts WAV audio (FFmpeg) for an uploaded video."
 )
-async def process_video(video_id: str) -> VideoProcessingResponse:
-    return await ProcessingService.process_video(video_id)
+async def process_video(
+    video_id: str,
+    db: Session = Depends(get_db),
+) -> VideoProcessingResponse:
+    return await ProcessingService.process_video(video_id, db=db)
 
 @router.get(
     "/{video_id}/metadata",
@@ -21,5 +27,8 @@ async def process_video(video_id: str) -> VideoProcessingResponse:
     summary="Get video metadata",
     description="Retrieves technical video metadata, thumbnail, and audio file status for an uploaded video by ID."
 )
-async def get_metadata(video_id: str) -> VideoProcessingResponse:
-    return await ProcessingService.get_metadata(video_id)
+async def get_metadata(
+    video_id: str,
+    db: Session = Depends(get_db),
+) -> VideoProcessingResponse:
+    return await ProcessingService.get_metadata(video_id, db=db)

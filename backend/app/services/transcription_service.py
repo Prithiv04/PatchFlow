@@ -1,11 +1,15 @@
 import json
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Optional
+
 from fastapi import HTTPException, status
 from fastapi.responses import FileResponse
+from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.logger import logger
+from app.db.models import Transcript, Video
 from app.schemas.transcription import VideoTranscriptResponse, TranscriptSegment
 from app.services.processing_service import ProcessingService
 from app.utils.ffmpeg_utils import extract_audio
@@ -15,7 +19,10 @@ from app.utils.whisper_utils import transcribe_audio_file
 
 class TranscriptionService:
     @staticmethod
-    async def transcribe_video(video_id: str) -> VideoTranscriptResponse:
+    async def transcribe_video(
+        video_id: str,
+        db: Optional[Session] = None,
+    ) -> VideoTranscriptResponse:
         logger.info("Transcription requested for video_id='%s'", video_id)
 
         audio_dir: Path = settings.audio_path
@@ -55,6 +62,7 @@ class TranscriptionService:
             ) from exc
 
         created_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
 
         # Save JSON transcript
         transcript_dir: Path = settings.transcript_path
@@ -79,6 +87,38 @@ class TranscriptionService:
         caption_path = caption_dir / f"{video_id}.srt"
         export_srt_file(result["segments"], caption_path)
 
+        # Persist Transcript record to DB if session provided
+        if db is not None:
+            # Upsert Transcript
+            existing = db.query(Transcript).filter(Transcript.video_id == video_id).first()
+            if existing:
+                existing.language = result["language"]
+                existing.full_text = result["full_text"]
+                existing.segments_json = json.dumps(result["segments"])
+                existing.transcript_path = f"transcripts/{video_id}.json"
+                existing.caption_path = f"captions/{video_id}.srt"
+                existing.created_at = now_utc
+            else:
+                transcript_record = Transcript(
+                    video_id=video_id,
+                    language=result["language"],
+                    full_text=result["full_text"],
+                    segments_json=json.dumps(result["segments"]),
+                    transcript_path=f"transcripts/{video_id}.json",
+                    caption_path=f"captions/{video_id}.srt",
+                    created_at=now_utc,
+                )
+                db.add(transcript_record)
+
+            # Update Video status to "transcribed"
+            video_record = db.query(Video).filter(Video.id == video_id).first()
+            if video_record:
+                video_record.status = "transcribed"
+                video_record.updated_at = now_utc
+
+            db.commit()
+            logger.info("Transcript record persisted to DB for video_id='%s'", video_id)
+
         logger.info("Transcription completed successfully for video_id='%s'", video_id)
 
         return VideoTranscriptResponse(
@@ -93,17 +133,20 @@ class TranscriptionService:
         )
 
     @staticmethod
-    async def get_transcript(video_id: str) -> VideoTranscriptResponse:
+    async def get_transcript(
+        video_id: str,
+        db: Optional[Session] = None,
+    ) -> VideoTranscriptResponse:
         transcript_file = settings.transcript_path / f"{video_id}.json"
         if not transcript_file.exists():
-            return await TranscriptionService.transcribe_video(video_id)
+            return await TranscriptionService.transcribe_video(video_id, db=db)
 
         try:
             data = json.loads(transcript_file.read_text(encoding="utf-8"))
             return VideoTranscriptResponse(**data)
         except Exception as exc:
             logger.error("Failed to read transcript for video_id='%s': %s", video_id, str(exc))
-            return await TranscriptionService.transcribe_video(video_id)
+            return await TranscriptionService.transcribe_video(video_id, db=db)
 
     @staticmethod
     async def get_captions(video_id: str) -> FileResponse:

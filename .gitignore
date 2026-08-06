@@ -155,3 +155,9 @@ env/
 backend/uploads/*
 !backend/uploads/.gitkeep
 
+# SQLite Databases
+*.db
+*.sqlite
+*.sqlite3
+
+
