@@ -162,7 +162,7 @@ export default function CreatePatchPage() {
                 onFocus={() => setFocused(true)}
                 onBlur={() => setFocused(false)}
                 placeholder={'e.g. Replace every occurrence of "GPT-4" with "GPT-5" across transcripts and captions.'}
-                className="w-full p-4 bg-transparent text-text text-sm placeholder:text-muted/50 focus:outline-none resize-none leading-relaxed"
+                className="w-full px-5 py-4 bg-transparent text-text text-sm placeholder:text-muted/50 focus:outline-none resize-none leading-normal"
               />
 
               {/* Progress Indicator Bar along bottom of textarea */}
