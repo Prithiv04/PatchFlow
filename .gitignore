@@ -152,19 +152,24 @@ __pycache__/
 venv/
 env/
 .env
-backend/uploads/*
-!backend/uploads/.gitkeep
 
-<<<<<<< HEAD
 # SQLite Databases
 *.db
 *.sqlite
 *.sqlite3
 
+# Uploads
+backend/uploads/*
+!backend/uploads/.gitkeep
 
-=======
-# SQLite database files
-*.db
-*.sqlite
-*.sqlite3
->>>>>>> 8e22537c161aa989fe2d285dfdab645c0e3d166f
+# Generated video processing outputs
+backend/audio/*
+backend/captions/*
+backend/transcripts/*
+backend/thumbnails/*
+
+# Keep empty folders tracked
+!backend/audio/.gitkeep
+!backend/captions/.gitkeep
+!backend/transcripts/.gitkeep
+!backend/thumbnails/.gitkeep
