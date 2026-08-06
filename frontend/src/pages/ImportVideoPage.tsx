@@ -6,10 +6,8 @@ import {
   FileVideo,
   X,
   CheckCircle2,
-  AlertCircle,
   Film,
   Sparkles,
-  ArrowRight,
   FolderOpen,
   MessageSquare,
   FileText,
@@ -84,6 +82,10 @@ export default function ImportVideoPage() {
     return (bytes / (1024 * 1024)).toFixed(1) + " MB";
   };
 
+  const openFilePicker = () => {
+    fileInputRef.current?.click();
+  };
+
   // Start simulated upload modal
   const handleStartUpload = () => {
     if (!selectedFile) return;
@@ -146,29 +148,39 @@ export default function ImportVideoPage() {
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
-            onClick={() => fileInputRef.current?.click()}
+            onClick={openFilePicker}
             animate={{
               scale: isDragging ? 1.01 : 1,
               borderColor: isDragging ? "rgba(124, 58, 237, 0.8)" : "rgba(255, 255, 255, 0.15)",
               backgroundColor: isDragging ? "rgba(124, 58, 237, 0.08)" : "rgba(255, 255, 255, 0.02)",
             }}
-            className="cursor-pointer border-2 border-dashed rounded-2xl p-8 md:p-12 text-center transition-all flex flex-col items-center justify-center space-y-4 group hover:border-primary/60 hover:bg-white/[0.03]"
+            className="cursor-pointer border-2 border-dashed rounded-2xl p-8 md:p-12 text-center transition-all flex flex-col items-center justify-center space-y-5 group hover:border-primary/60 hover:bg-white/[0.03]"
           >
             <div className="w-16 h-16 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary group-hover:scale-110 group-hover:bg-primary group-hover:text-white transition-all shadow-glow">
               <Upload className="w-8 h-8" />
             </div>
 
-            <div className="space-y-1">
+            <div className="space-y-2 max-w-md">
               <p className="text-base font-semibold text-text">
-                Drag &amp; Drop your video here, or{" "}
-                <span className="text-primary underline underline-offset-4 font-bold">
-                  Browse Files
-                </span>
+                Drag &amp; Drop your video here, or click to browse
               </p>
               <p className="text-xs text-muted">
                 Supported formats: MP4, MOV, AVI, MKV • Maximum file size: 2GB
               </p>
             </div>
+
+            {/* Explicit Browse Files Button */}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                openFilePicker();
+              }}
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-surface hover:bg-white/10 text-text font-semibold text-xs border border-primary/40 hover:border-primary transition-all shadow-sm active:scale-[0.98]"
+            >
+              <FolderOpen className="w-4 h-4 text-primary" />
+              <span>Browse Files</span>
+            </button>
 
             <div className="flex items-center gap-2 pt-2">
               {["MP4", "MOV", "AVI", "MKV"].map((fmt) => (
@@ -213,12 +225,22 @@ export default function ImportVideoPage() {
               </div>
             </div>
 
-            <button
-              onClick={() => setSelectedFile(null)}
-              className="px-3 py-1.5 rounded-xl bg-surface hover:bg-rose-500/20 hover:text-rose-400 text-muted border border-border text-xs font-medium transition flex items-center gap-1.5 shrink-0"
-            >
-              <X className="w-4 h-4" /> Remove
-            </button>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={openFilePicker}
+                className="px-3 py-1.5 rounded-xl bg-surface hover:bg-white/10 text-text border border-border text-xs font-medium transition flex items-center gap-1.5"
+              >
+                <FolderOpen className="w-3.5 h-3.5 text-primary" /> Change
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedFile(null)}
+                className="px-3 py-1.5 rounded-xl bg-surface hover:bg-rose-500/20 hover:text-rose-400 text-muted border border-border text-xs font-medium transition flex items-center gap-1.5"
+              >
+                <X className="w-4 h-4" /> Remove
+              </button>
+            </div>
           </motion.div>
         )}
       </motion.div>
