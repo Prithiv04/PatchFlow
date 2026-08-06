@@ -38,9 +38,10 @@ def test_process_nonexistent_video():
     assert "not found" in response.json()["detail"].lower()
 
 
+@patch("app.services.processing_service.extract_audio")
 @patch("app.services.processing_service.extract_video_metadata")
 @patch("app.services.processing_service.generate_thumbnail")
-def test_process_valid_video_success(mock_gen_thumb, mock_extract_meta, mock_upload_file):
+def test_process_valid_video_success(mock_gen_thumb, mock_extract_meta, mock_extract_audio, mock_upload_file):
     """Test successful video processing returning expected metadata and thumbnail path."""
     video_id, video_file = mock_upload_file
 
@@ -86,9 +87,10 @@ def test_process_valid_video_success(mock_gen_thumb, mock_extract_meta, mock_upl
     assert thumb_path.read_bytes() == b"JPEG_HEADER_MOCK_DATA"
 
 
+@patch("app.services.processing_service.extract_audio")
 @patch("app.services.processing_service.extract_video_metadata")
 @patch("app.services.processing_service.generate_thumbnail")
-def test_process_short_video_thumbnail_timestamp(mock_gen_thumb, mock_extract_meta, mock_upload_file):
+def test_process_short_video_thumbnail_timestamp(mock_gen_thumb, mock_extract_meta, mock_extract_audio, mock_upload_file):
     """Test short video (<5s) computes timestamp as duration / 2."""
     video_id, video_file = mock_upload_file
 
@@ -125,9 +127,10 @@ def test_process_metadata_extraction_failure(mock_extract_meta, mock_upload_file
     assert "extraction failed" in response.json()["detail"].lower()
 
 
+@patch("app.services.processing_service.extract_audio")
 @patch("app.services.processing_service.extract_video_metadata")
 @patch("app.services.processing_service.generate_thumbnail")
-def test_process_thumbnail_generation_failure(mock_gen_thumb, mock_extract_meta, mock_upload_file):
+def test_process_thumbnail_generation_failure(mock_gen_thumb, mock_extract_meta, mock_extract_audio, mock_upload_file):
     """Test 500 response when FFmpeg thumbnail generation fails."""
     video_id, _ = mock_upload_file
     mock_extract_meta.return_value = {

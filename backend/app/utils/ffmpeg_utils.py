@@ -118,3 +118,52 @@ def generate_thumbnail(video_path: Path, output_path: Path, timestamp: float) ->
     except subprocess.CalledProcessError as exc:
         logger.error("FFmpeg thumbnail generation failed for '%s': %s", video_path, exc.stderr)
         raise RuntimeError(f"FFmpeg thumbnail generation failed: {exc.stderr or str(exc)}") from exc
+
+
+def extract_audio(video_path: Path, output_audio_path: Path) -> Path:
+    """
+    Extract 16kHz mono PCM WAV audio from a video file using FFmpeg.
+    As specified in implementation6.md: PCM WAV, mono, 16kHz.
+    Cleans up partial files on failure.
+    """
+    if not video_path.exists():
+        raise FileNotFoundError(f"Video file not found: {video_path}")
+
+    output_audio_path.parent.mkdir(parents=True, exist_ok=True)
+
+    cmd = [
+        settings.ffmpeg_path,
+        "-i", str(video_path),
+        "-vn",
+        "-acodec", "pcm_s16le",
+        "-ac", "1",
+        "-ar", "16000",
+        "-y",
+        str(output_audio_path)
+    ]
+
+    try:
+        subprocess.run(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=True
+        )
+        logger.info("Audio extracted successfully to '%s'", output_audio_path)
+        return output_audio_path
+    except FileNotFoundError as exc:
+        if output_audio_path.exists():
+            output_audio_path.unlink()
+        logger.error("FFmpeg binary not found at '%s': %s", settings.ffmpeg_path, str(exc))
+        raise RuntimeError(f"FFmpeg executable not found: {settings.ffmpeg_path}") from exc
+    except subprocess.CalledProcessError as exc:
+        if output_audio_path.exists():
+            output_audio_path.unlink()
+        logger.error("FFmpeg audio extraction failed for '%s': %s", video_path, exc.stderr)
+        raise RuntimeError(f"FFmpeg audio extraction failed: {exc.stderr or str(exc)}") from exc
+    except Exception as exc:
+        if output_audio_path.exists():
+            output_audio_path.unlink()
+        logger.error("Unexpected error during audio extraction for '%s': %s", video_path, str(exc))
+        raise
