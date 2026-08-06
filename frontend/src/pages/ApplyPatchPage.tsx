@@ -11,24 +11,28 @@ import {
   Loader2,
   Sparkles,
   ArrowRight,
+  Check,
+  Zap,
+  ShieldCheck
 } from "lucide-react";
 import { usePatchStore } from "@/store/usePatchStore";
 
 const STAGES = [
-  { id: "transcript", label: "Applying Transcript", description: "Replacing text matches in transcript file", icon: FileText },
-  { id: "captions", label: "Updating Captions", description: "Syncing changes to .srt caption file", icon: Subtitles },
-  { id: "description", label: "Updating Description", description: "Applying text diff to video description", icon: FileText },
-  { id: "pinned", label: "Updating Pinned Comment", description: "Patching pinned comment content", icon: MessageSquare },
-  { id: "version", label: "Saving Version", description: "Creating immutable v1.3 snapshot", icon: Save },
-  { id: "report", label: "Generating Report", description: "Compiling patch analytics and summary", icon: BarChart3 },
+  { id: "transcript", label: "Applying Transcript", description: "Replacing text matches in transcript file", detail: "8 occurrences updated", icon: FileText },
+  { id: "captions", label: "Updating Captions", description: "Syncing changes to .srt caption file", detail: "3 cues re-indexed", icon: Subtitles },
+  { id: "description", label: "Updating Description", description: "Applying text diff to video description", detail: "2 matches replaced", icon: FileText },
+  { id: "pinned", label: "Updating Pinned Comment", description: "Patching pinned comment content", detail: "1 comment updated", icon: MessageSquare },
+  { id: "version", label: "Saving Version", description: "Creating immutable v1.3 snapshot", detail: "Snapshot v1.3 stored", icon: Save },
+  { id: "report", label: "Generating Report", description: "Compiling patch analytics and summary", detail: "Report compiled", icon: BarChart3 },
 ];
 
-const STAGE_DURATION = 650; // ms per stage
+const STAGE_DURATION = 700; // ms per stage
 
 const containerVariants: Variants = {
   hidden: { opacity: 0 },
   visible: { opacity: 1, transition: { staggerChildren: 0.06 } },
 };
+
 const itemVariants: Variants = {
   hidden: { y: 14, opacity: 0 },
   visible: { y: 0, opacity: 1, transition: { type: "spring", stiffness: 280, damping: 22 } },
@@ -37,15 +41,18 @@ const itemVariants: Variants = {
 export default function ApplyPatchPage() {
   const navigate = useNavigate();
   const { currentPatchCommand, addPatchEntry, setPatchReport } = usePatchStore();
+  
   const [completedIndex, setCompletedIndex] = useState(-1);
   const [progress, setProgress] = useState(0);
   const [done, setDone] = useState(false);
+  const [countdown, setCountdown] = useState(3);
 
   useEffect(() => {
     let stageIdx = -1;
     const stageInterval = setInterval(() => {
       stageIdx += 1;
       setCompletedIndex(stageIdx);
+
       if (stageIdx >= STAGES.length - 1) {
         clearInterval(stageInterval);
         setDone(true);
@@ -55,7 +62,7 @@ export default function ApplyPatchPage() {
           version: "v1.3",
           date: "Just now",
           author: "Jane Doe",
-          command: currentPatchCommand || "Replace every occurrence of GPT-4 with GPT-5.",
+          command: currentPatchCommand || 'Replace every occurrence of "GPT-4" with "GPT-5".',
           summary: "Text replacement patch applied across all assets successfully.",
           assetsAffected: ["Transcript", "Captions", "Description", "Pinned Comment"],
           occurrences: 14,
@@ -73,7 +80,6 @@ export default function ApplyPatchPage() {
             { asset: "Pinned Comment", version: "v1.3", status: "Applied", changes: 1 },
           ],
         });
-        setTimeout(() => navigate("/history"), 900);
       }
     }, STAGE_DURATION);
 
@@ -83,9 +89,9 @@ export default function ApplyPatchPage() {
           clearInterval(progressInterval);
           return 100;
         }
-        return prev + 2;
+        return prev + 3;
       });
-    }, STAGE_DURATION * STAGES.length / 50);
+    }, (STAGE_DURATION * STAGES.length) / 40);
 
     return () => {
       clearInterval(stageInterval);
@@ -93,129 +99,260 @@ export default function ApplyPatchPage() {
     };
   }, []);
 
+  // Automatic redirect countdown timer when done
+  useEffect(() => {
+    if (!done) return;
+    const timer = setInterval(() => {
+      setCountdown((prev) => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          navigate("/history");
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [done, navigate]);
+
   return (
     <motion.div
       variants={containerVariants}
       initial="hidden"
       animate="visible"
-      className="max-w-3xl mx-auto space-y-8 pb-16"
+      className="max-w-3xl mx-auto space-y-8 py-6 pb-16"
     >
-      {/* Header */}
+      {/* Header Banner */}
       <motion.div
         variants={itemVariants}
-        className="glass-card rounded-2xl p-6 md:p-8 border border-primary/30 bg-gradient-to-r from-card via-surface to-card relative overflow-hidden"
+        className="glass-card rounded-2xl p-6 md:p-8 space-y-5 border border-primary/30 bg-gradient-to-r from-card via-surface to-card relative overflow-hidden shadow-2xl"
       >
-        <div className="absolute -top-20 -right-20 w-72 h-72 bg-primary/20 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute -top-24 -right-24 w-80 h-80 bg-primary/20 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute -bottom-24 -left-24 w-72 h-72 bg-purple-600/15 rounded-full blur-3xl pointer-events-none" />
+
         <div className="relative z-10 flex items-center justify-between gap-4">
-          <div className="space-y-1">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs font-semibold text-primary">
+          <div className="space-y-1.5">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/15 border border-primary/30 text-xs font-semibold text-primary shadow-glow">
               <Sparkles className="w-3.5 h-3.5" />
-              <span>Applying Patch</span>
+              <span>Applying Patch Execution</span>
+              <span className="w-1.5 h-1.5 rounded-full bg-primary animate-ping" />
             </div>
             <h1 className="text-2xl md:text-3xl font-extrabold text-text tracking-tight">
-              Patch in Progress...
+              {done ? "Patch Applied Successfully!" : "Applying Patch Commands..."}
             </h1>
             <p className="text-muted text-sm">
-              PatchFlow is writing changes across all detected assets.
+              {done
+                ? "Version v1.3 snapshot stored and patch analytics compiled."
+                : "PatchFlow is applying text replacements across transcripts, captions, and metadata."}
             </p>
           </div>
-          <div className="w-12 h-12 rounded-2xl bg-primary/15 border border-primary/30 flex items-center justify-center text-primary shrink-0">
-            <Loader2 className="w-6 h-6 animate-spin" />
+
+          <div
+            className={`w-12 h-12 rounded-2xl border flex items-center justify-center shrink-0 transition-all duration-300 ${
+              done
+                ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/40 shadow-glow"
+                : "bg-primary/15 text-primary border-primary/30 shadow-glow"
+            }`}
+          >
+            {done ? (
+              <CheckCircle2 className="w-6 h-6" />
+            ) : (
+              <Loader2 className="w-6 h-6 animate-spin" />
+            )}
           </div>
         </div>
 
-        {/* Overall Progress Bar */}
-        <div className="space-y-2 pt-5">
+        {/* Global Progress Bar */}
+        <div className="space-y-2 pt-2">
           <div className="flex items-center justify-between text-xs font-semibold">
-            <span className="text-text">Patch Progress</span>
-            <span className="text-primary font-mono">{progress}%</span>
+            <span className="text-text flex items-center gap-2">
+              <span>Overall Patch Completion</span>
+              <span className="text-[11px] font-normal text-muted">
+                ({Math.min(completedIndex + 1, STAGES.length)}/{STAGES.length} stages)
+              </span>
+            </span>
+            <span className="text-primary font-mono text-sm">{progress}%</span>
           </div>
-          <div className="w-full h-3 rounded-full bg-surface border border-border overflow-hidden p-0.5">
+
+          {/* Enhanced Glowing Bar */}
+          <div className="w-full h-3.5 rounded-full bg-surface border border-border overflow-hidden p-0.5 relative">
             <motion.div
-              className="h-full bg-gradient-to-r from-primary via-purple-500 to-emerald-400 rounded-full"
+              className="h-full bg-gradient-to-r from-primary via-purple-500 to-emerald-400 rounded-full relative"
               style={{ width: `${progress}%` }}
               transition={{ ease: "easeOut", duration: 0.15 }}
-            />
+            >
+              {!done && (
+                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent animate-pulse" />
+              )}
+            </motion.div>
+          </div>
+
+          <div className="flex items-center justify-between text-[11px] font-mono text-muted pt-0.5">
+            <span>Target: Version v1.3</span>
+            <span>{done ? "Completed in 3.8s" : "Executing sequential stages..."}</span>
           </div>
         </div>
       </motion.div>
 
-      {/* Animated Stage Checklist */}
-      <motion.div variants={itemVariants} className="glass-card rounded-2xl p-6 border border-border space-y-3">
-        <h2 className="text-sm font-bold uppercase tracking-wider text-muted mb-2">Patch Stages</h2>
-        {STAGES.map((stage, idx) => {
-          const isComplete = idx <= completedIndex;
-          const isCurrent = idx === completedIndex + 1;
-          const StageIcon = stage.icon;
+      {/* Sequential Animated Stage Checklist */}
+      <motion.div variants={itemVariants} className="glass-card rounded-2xl p-6 md:p-8 space-y-4 border border-border">
+        <div className="flex items-center justify-between mb-2">
+          <h2 className="text-xs font-bold uppercase tracking-wider text-muted flex items-center gap-2">
+            <Zap className="w-3.5 h-3.5 text-primary" />
+            Sequential Patch Stages
+          </h2>
+          <span className="text-xs font-mono text-muted">Linear Workflow</span>
+        </div>
 
-          return (
-            <motion.div
-              key={stage.id}
-              initial={{ opacity: 0, x: -8 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: idx * 0.05 }}
-              className={`p-4 rounded-xl border transition-all flex items-center justify-between gap-4 ${
-                isComplete
-                  ? "bg-primary/5 border-primary/25"
-                  : isCurrent
-                  ? "bg-card border-border"
-                  : "bg-card/30 border-border/40 opacity-40"
-              }`}
-            >
-              <div className="flex items-center gap-3.5">
-                <div
-                  className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
-                    isComplete
-                      ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30"
-                      : isCurrent
-                      ? "bg-primary/20 text-primary border border-primary/40"
-                      : "bg-surface text-muted border border-border"
-                  }`}
-                >
+        <div className="space-y-3">
+          {STAGES.map((stage, idx) => {
+            const isComplete = idx <= completedIndex;
+            const isCurrent = idx === completedIndex + 1 && progress < 100;
+            const StageIcon = stage.icon;
+
+            return (
+              <motion.div
+                key={stage.id}
+                initial={{ opacity: 0, x: -8 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: idx * 0.05 }}
+                className={`p-4 rounded-xl border transition-all duration-300 flex items-center justify-between gap-4 ${
+                  isComplete
+                    ? "glass-card bg-emerald-500/[0.04] border-emerald-500/30"
+                    : isCurrent
+                    ? "glass-card bg-primary/10 border-primary/50 shadow-glow"
+                    : "bg-card/40 border-border/50 opacity-40"
+                }`}
+              >
+                <div className="flex items-center gap-3.5">
+                  {/* Spinner -> Checkmark Morph Node Container */}
+                  <div className="relative shrink-0">
+                    <AnimatePresence mode="wait">
+                      {isComplete ? (
+                        <motion.div
+                          key="done"
+                          initial={{ scale: 0.5, opacity: 0, rotate: -45 }}
+                          animate={{ scale: 1, opacity: 1, rotate: 0 }}
+                          transition={{ type: "spring", stiffness: 400, damping: 20 }}
+                          className="w-9 h-9 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 flex items-center justify-center shadow-glow"
+                        >
+                          <Check className="w-5 h-5 stroke-[2.5]" />
+                        </motion.div>
+                      ) : isCurrent ? (
+                        <motion.div
+                          key="running"
+                          initial={{ scale: 0.8, opacity: 0 }}
+                          animate={{ scale: 1, opacity: 1 }}
+                          className="w-9 h-9 rounded-xl bg-primary/20 text-primary border border-primary/50 flex items-center justify-center shadow-glow"
+                        >
+                          <Loader2 className="w-5 h-5 animate-spin" />
+                        </motion.div>
+                      ) : (
+                        <motion.div
+                          key="queued"
+                          className="w-9 h-9 rounded-xl bg-surface text-muted border border-border flex items-center justify-center"
+                        >
+                          <StageIcon className="w-4 h-4" />
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+
+                  {/* Stage Labels & Details */}
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3
+                        className={`text-sm font-semibold transition-colors ${
+                          isComplete ? "text-text" : isCurrent ? "text-primary" : "text-muted"
+                        }`}
+                      >
+                        {stage.label}
+                      </h3>
+                      {isComplete && (
+                        <span className="text-[10px] font-mono font-medium px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                          {stage.detail}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted/80">{stage.description}</p>
+                  </div>
+                </div>
+
+                {/* Status Indicator Pill */}
+                <div className="shrink-0 font-mono text-xs font-semibold">
                   {isComplete ? (
-                    <CheckCircle2 className="w-5 h-5" />
+                    <span className="text-emerald-400 flex items-center gap-1 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 rounded-full">
+                      ✓ Done
+                    </span>
                   ) : isCurrent ? (
-                    <Loader2 className="w-5 h-5 animate-spin" />
+                    <span className="text-primary animate-pulse bg-primary/10 border border-primary/20 px-2.5 py-1 rounded-full">
+                      Running...
+                    </span>
                   ) : (
-                    <StageIcon className="w-4 h-4" />
+                    <span className="text-muted/50 px-2 py-0.5">Queued</span>
                   )}
                 </div>
-                <div>
-                  <h3 className={`text-sm font-semibold ${isComplete ? "text-text" : "text-muted"}`}>
-                    {stage.label}
-                  </h3>
-                  <p className="text-[11px] text-muted/80">{stage.description}</p>
-                </div>
-              </div>
-              <span className={`text-xs font-mono font-semibold shrink-0 ${isComplete ? "text-emerald-400" : isCurrent ? "text-primary animate-pulse" : "text-muted/40"}`}>
-                {isComplete ? "Done" : isCurrent ? "Running..." : "Queued"}
-              </span>
-            </motion.div>
-          );
-        })}
+              </motion.div>
+            );
+          })}
+        </div>
       </motion.div>
 
-      {/* Completion Banner */}
+      {/* Celebratory Success Banner with Countdown */}
       <AnimatePresence>
         {done && (
           <motion.div
-            initial={{ opacity: 0, scale: 0.96 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="glass-card rounded-2xl border border-emerald-500/40 bg-emerald-500/10 p-5 flex items-center justify-between gap-4"
+            initial={{ opacity: 0, scale: 0.96, y: 10 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            transition={{ type: "spring", stiffness: 300, damping: 25 }}
+            className="glass-card rounded-2xl p-6 border border-emerald-500/50 bg-gradient-to-r from-emerald-500/10 via-surface to-emerald-500/10 space-y-5 shadow-2xl"
           >
-            <div className="flex items-center gap-3">
-              <CheckCircle2 className="w-6 h-6 text-emerald-400 shrink-0" />
-              <div>
-                <h4 className="font-bold text-text text-sm">Patch Applied Successfully!</h4>
-                <p className="text-xs text-muted">Navigating to Version History...</p>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-2xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 flex items-center justify-center shrink-0 shadow-glow">
+                  <ShieldCheck className="w-6 h-6" />
+                </div>
+                <div className="space-y-1">
+                  <h3 className="font-extrabold text-text text-base md:text-lg">
+                    Patch v1.3 Successfully Applied!
+                  </h3>
+                  <p className="text-xs text-muted">
+                    Version history snapshot created. Redirecting in{" "}
+                    <span className="text-emerald-400 font-bold font-mono text-sm">{countdown}s</span>...
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => navigate("/history")}
+                className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-black font-extrabold text-xs transition-all shadow-glow flex items-center justify-center gap-2 shrink-0 active:scale-[0.98]"
+              >
+                <span>View Version History</span>
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Summary Stat Pills */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-3 border-t border-emerald-500/20 text-xs">
+              <div className="p-2.5 rounded-xl bg-surface/60 border border-border">
+                <span className="text-muted block text-[11px]">Version Tag</span>
+                <span className="font-bold text-primary font-mono">v1.3</span>
+              </div>
+              <div className="p-2.5 rounded-xl bg-surface/60 border border-border">
+                <span className="text-muted block text-[11px]">Occurrences</span>
+                <span className="font-bold text-text">14 Replaced</span>
+              </div>
+              <div className="p-2.5 rounded-xl bg-surface/60 border border-border">
+                <span className="text-muted block text-[11px]">Processing Time</span>
+                <span className="font-bold text-text">3.8 Seconds</span>
+              </div>
+              <div className="p-2.5 rounded-xl bg-surface/60 border border-border">
+                <span className="text-muted block text-[11px]">Execution Status</span>
+                <span className="font-bold text-emerald-400">Applied</span>
               </div>
             </div>
-            <button
-              onClick={() => navigate("/history")}
-              className="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-black font-semibold text-xs flex items-center gap-1.5 shrink-0 transition"
-            >
-              View History <ArrowRight className="w-3.5 h-3.5" />
-            </button>
           </motion.div>
         )}
       </AnimatePresence>
