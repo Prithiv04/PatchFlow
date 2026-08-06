@@ -18,17 +18,29 @@ function App() {
       <BrowserRouter>
         <AppLayout>
           <Routes>
+            {/* Dashboard */}
             <Route path="/" element={<DashboardPage />} />
+
+            {/* Import & Processing Flow */}
             <Route path="/import" element={<ImportVideoPage />} />
             <Route path="/import-video" element={<ImportVideoPage />} />
             <Route path="/processing" element={<ProcessingPage />} />
+
+            {/* Video Details */}
             <Route path="/video/:id" element={<VideoDetailsPage />} />
-            <Route path="/patch/create" element={<CreatePatchPage />} />
+            <Route path="/videos" element={<VideoDetailsPage />} />
+
+            {/* Patch Workflow */}
             <Route path="/create-patch" element={<CreatePatchPage />} />
-            <Route path="/patch/impact" element={<ImpactAnalysisPage />} />
-            <Route path="/impact-analysis" element={<ImpactAnalysisPage />} />
+            <Route path="/patch/create" element={<CreatePatchPage />} />
             <Route path="/patch/preview" element={<PreviewPage />} />
             <Route path="/patch/apply" element={<ApplyPatchPage />} />
+
+            {/* Impact Analysis */}
+            <Route path="/patch/impact" element={<ImpactAnalysisPage />} />
+            <Route path="/impact-analysis" element={<ImpactAnalysisPage />} />
+
+            {/* History & Report */}
             <Route path="/history" element={<HistoryPage />} />
             <Route path="/report" element={<ReportPage />} />
             <Route path="/reports" element={<ReportPage />} />

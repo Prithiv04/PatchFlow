@@ -9,7 +9,6 @@ import {
   Layers,
   ChevronLeft,
   ChevronRight,
-  Sparkles,
   Settings
 } from "lucide-react";
 import { motion } from "framer-motion";
@@ -58,7 +57,7 @@ export default function AppSidebar() {
         {/* Desktop Collapse Toggle */}
         <button
           onClick={toggleSidebar}
-          className="hidden md:flex p-1.5 rounded-lg text-muted hover:text-text hover:bg-surface border border-transparent hover:border-border transition-all"
+          className="hidden md:flex p-1.5 rounded-lg text-muted hover:text-text hover:bg-white/10 border border-transparent hover:border-white/10 transition-all"
           title={sidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
         >
           {sidebarOpen ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
@@ -75,21 +74,21 @@ export default function AppSidebar() {
               to={item.to}
               onClick={() => setMobileMenuOpen(false)}
               className={({ isActive }) =>
-                `flex items-center gap-3 px-3 py-2.5 rounded-xl font-medium text-sm transition-all relative ${
+                `flex items-center gap-3 px-3 py-2.5 rounded-xl font-medium text-sm transition-all relative group ${
                   isActive
                     ? "bg-primary/15 text-text border border-primary/30 shadow-sm"
-                    : "text-muted hover:text-text hover:bg-white/5 border border-transparent"
+                    : "text-muted hover:text-text hover:bg-white/5 border border-transparent hover:border-white/10"
                 }`
               }
             >
               {({ isActive }) => (
                 <>
-                  <Icon className={`w-5 h-5 shrink-0 ${isActive ? "text-primary" : "text-muted"}`} />
+                  <Icon className={`w-5 h-5 shrink-0 transition-colors ${isActive ? "text-primary" : "text-muted group-hover:text-text"}`} />
                   {sidebarOpen && <span className="truncate">{item.label}</span>}
                   {isActive && (
                     <motion.div
                       layoutId="activeIndicator"
-                      className="absolute left-0 top-2 bottom-2 w-1 bg-primary rounded-r-full"
+                      className="absolute left-0 top-2 bottom-2 w-1 bg-primary rounded-r-full shadow-glow"
                     />
                   )}
                 </>
@@ -102,7 +101,7 @@ export default function AppSidebar() {
       {/* Footer / Quick Info */}
       <div className="p-3 border-t border-border/50">
         {sidebarOpen ? (
-          <div className="glass-card rounded-xl p-3 flex items-center justify-between">
+          <div className="glass-card rounded-xl p-3 flex items-center justify-between hover:border-white/20 transition-all">
             <div className="flex items-center gap-2.5 overflow-hidden">
               <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-purple-500 to-indigo-600 flex items-center justify-center text-xs font-semibold text-white shrink-0">
                 JD
