@@ -155,9 +155,16 @@ env/
 backend/uploads/*
 !backend/uploads/.gitkeep
 
+<<<<<<< HEAD
 # SQLite Databases
 *.db
 *.sqlite
 *.sqlite3
 
 
+=======
+# SQLite database files
+*.db
+*.sqlite
+*.sqlite3
+>>>>>>> 8e22537c161aa989fe2d285dfdab645c0e3d166f
