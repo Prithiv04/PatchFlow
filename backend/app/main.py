@@ -1,9 +1,14 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from .core.config import settings
-from .core.logger import logger
+from app.core.config import settings
+from app.core.logger import logger
+from app.api.v1 import v1_router
 
-app = FastAPI(title="PatchFlow API", version="0.1.0")
+app = FastAPI(
+    title="PatchFlow API",
+    version="0.1.0",
+    description="Video Patching & Asset Pipeline Backend API"
+)
 
 # CORS configuration
 app.add_middleware(
@@ -13,6 +18,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Include v1 Router
+app.include_router(v1_router, prefix="/api/v1")
 
 @app.get("/", summary="Root endpoint")
 async def root():
