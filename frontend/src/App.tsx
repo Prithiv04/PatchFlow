@@ -20,14 +20,18 @@ function App() {
           <Routes>
             <Route path="/" element={<DashboardPage />} />
             <Route path="/import" element={<ImportVideoPage />} />
+            <Route path="/import-video" element={<ImportVideoPage />} />
             <Route path="/processing" element={<ProcessingPage />} />
             <Route path="/video/:id" element={<VideoDetailsPage />} />
             <Route path="/patch/create" element={<CreatePatchPage />} />
+            <Route path="/create-patch" element={<CreatePatchPage />} />
             <Route path="/patch/impact" element={<ImpactAnalysisPage />} />
+            <Route path="/impact-analysis" element={<ImpactAnalysisPage />} />
             <Route path="/patch/preview" element={<PreviewPage />} />
             <Route path="/patch/apply" element={<ApplyPatchPage />} />
             <Route path="/history" element={<HistoryPage />} />
             <Route path="/report" element={<ReportPage />} />
+            <Route path="/reports" element={<ReportPage />} />
           </Routes>
         </AppLayout>
       </BrowserRouter>
