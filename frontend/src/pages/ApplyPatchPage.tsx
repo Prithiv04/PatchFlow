@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { motion, AnimatePresence, Variants } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
@@ -37,6 +37,10 @@ const itemVariants: Variants = {
   visible: { y: 0, opacity: 1, transition: { type: "spring", stiffness: 280, damping: 22 } },
 };
 
+// Module-level map deduplicates the apply promise across React 18 StrictMode
+// double-mounts, so the second mount awaits the same in-flight request.
+const activeApplyJobs = new Map<string, Promise<void>>();
+
 export default function ApplyPatchPage() {
   const navigate = useNavigate();
   const { currentVideoId, activePatch, fetchTranscript, fetchHistory, setPatchReport } = usePatchStore();
@@ -48,8 +52,6 @@ export default function ApplyPatchPage() {
   const [countdown, setCountdown] = useState(3);
   const [error, setError] = useState<string | null>(null);
 
-  const hasExecutedRef = useRef(false);
-
   useEffect(() => {
     if (!currentVideoId || !activePatch) {
       toast.error("No active patch proposal found.");
@@ -57,36 +59,39 @@ export default function ApplyPatchPage() {
       return;
     }
 
-    if (hasExecutedRef.current) {
-      return;
-    }
-    hasExecutedRef.current = true;
-
+    const jobKey = `${currentVideoId}__${activePatch.patch_id}`;
     let isMounted = true;
 
-    async function executePatch() {
+    async function runApply() {
       setIsApplying(true);
       setError(null);
       setCompletedIndex(0);
       setProgress(25);
 
       try {
-        // Step 1: Execute patch on backend
-        await patchService.applyPatch(currentVideoId!, activePatch!.patch_id);
+        // Deduplicate: only one real apply call per patch, even under StrictMode
+        if (!activeApplyJobs.has(jobKey)) {
+          const job = (async () => {
+            await patchService.applyPatch(currentVideoId!, activePatch!.patch_id);
+          })();
+          activeApplyJobs.set(jobKey, job);
+          job.finally(() => activeApplyJobs.delete(jobKey));
+        }
+
+        // Both first and second (StrictMode) mount instances await the same promise
+        await activeApplyJobs.get(jobKey);
         if (!isMounted) return;
 
         setCompletedIndex(1);
         setProgress(60);
 
-        // Step 2: Refresh transcript, history, and report from backend
+        // Refresh transcript, history, and report from backend
         await Promise.all([
           fetchTranscript(currentVideoId!),
           fetchHistory(currentVideoId!),
           reportService
             .getPatchReport(currentVideoId!, activePatch!.patch_id)
-            .then((r) => {
-              if (isMounted) setPatchReport(r);
-            })
+            .then((r) => { if (isMounted) setPatchReport(r); })
             .catch(() => {}),
         ]);
 
@@ -98,14 +103,14 @@ export default function ApplyPatchPage() {
         toast.success("Patch applied successfully!");
       } catch (err: any) {
         if (!isMounted) return;
-        const msg = err?.response?.data?.detail || err?.message || "Failed to apply patch";
+        // Note: api.ts interceptor converts AxiosError → new Error(message),
+        // so err.response is stripped — check message string only.
+        const msg = err?.message || "Failed to apply patch";
         const isAlreadyApplied =
           msg.toLowerCase().includes("already been applied") ||
-          msg.toLowerCase().includes("already applied") ||
-          err?.response?.status === 400;
+          msg.toLowerCase().includes("already applied");
 
         if (isAlreadyApplied) {
-          // Graceful handling for duplicate apply attempts
           toast.success("This patch has already been applied.");
           try {
             await Promise.all([
@@ -113,9 +118,7 @@ export default function ApplyPatchPage() {
               fetchHistory(currentVideoId!),
               reportService
                 .getPatchReport(currentVideoId!, activePatch!.patch_id)
-                .then((r) => {
-                  if (isMounted) setPatchReport(r);
-                })
+                .then((r) => { if (isMounted) setPatchReport(r); })
                 .catch(() => {}),
             ]);
           } catch (_) {}
@@ -130,18 +133,17 @@ export default function ApplyPatchPage() {
           toast.error(msg);
         }
       } finally {
-        if (isMounted) {
-          setIsApplying(false);
-        }
+        if (isMounted) setIsApplying(false);
       }
     }
 
-    executePatch();
+    runApply();
 
     return () => {
       isMounted = false;
     };
-  }, [currentVideoId, activePatch, navigate, fetchTranscript, fetchHistory, setPatchReport]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentVideoId, activePatch?.patch_id]);
 
   // Automatic redirect countdown timer when done
   useEffect(() => {
