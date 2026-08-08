@@ -40,9 +40,12 @@ const STEPS: ProcessingStep[] = [
   { id: "ready", label: "Asset Ready", description: "Video asset ready for patch creation", detail: "v1.0 Baseline created", icon: Sparkles },
 ];
 
+// Module-level map to deduplicate in-flight backend pipeline promises across React 18 StrictMode double-mounts
+const activePipelines = new Map<string, Promise<void>>();
+
 export default function ProcessingPage() {
   const navigate = useNavigate();
-  const { currentVideoId, setMetadata, setTranscript } = usePatchStore();
+  const { currentVideoId, metadata, transcript, setMetadata, setTranscript } = usePatchStore();
   const [completedStepIndex, setCompletedStepIndex] = useState(-1);
   const [progress, setProgress] = useState(15);
   const [isFinished, setIsFinished] = useState(false);
@@ -58,43 +61,41 @@ export default function ProcessingPage() {
     }
   }, [currentVideoId, navigate]);
 
-  // Ref ensures the pipeline runs exactly once per mount even under
-  // React 18 StrictMode which double-invokes effects in development.
-  const hasRunRef = useRef(false);
-
   useEffect(() => {
-    // Skip if no video or pipeline already started
-    if (!currentVideoId || hasRunRef.current) return;
-    hasRunRef.current = true;
+    if (!currentVideoId) return;
 
     let isMounted = true;
 
     async function runBackendPipeline() {
       try {
         setError(null);
-        // Step 1: POST /process (Audio + Thumbnail + Metadata extraction)
-        setCompletedStepIndex(0);
-        setProgress(20);
+        if (isMounted) {
+          setCompletedStepIndex(0);
+          setProgress(20);
+        }
 
-        const meta = await processingService.processVideo(currentVideoId!);
-        if (!isMounted) return;
-        setMetadata(meta);
-        setCompletedStepIndex(2);
-        setProgress(50);
+        if (!activePipelines.has(currentVideoId!)) {
+          const promise = (async () => {
+            const metaRes = await processingService.processVideo(currentVideoId!);
+            usePatchStore.getState().setMetadata(metaRes);
 
-        // Step 2: POST /transcribe (Whisper AI speech-to-text)
-        const trans = await transcriptionService.transcribeVideo(currentVideoId!);
-        if (!isMounted) return;
-        setTranscript(trans);
-        setCompletedStepIndex(4);
-        setProgress(80);
+            const transRes = await transcriptionService.transcribeVideo(currentVideoId!);
+            usePatchStore.getState().setTranscript(transRes);
 
-        // Step 3: GET /metadata & GET /transcript (verify persisted endpoints after process & transcribe 200)
-        const store = usePatchStore.getState();
-        await Promise.all([
-          store.fetchMetadata(currentVideoId!),
-          store.fetchTranscript(currentVideoId!),
-        ]);
+            const store = usePatchStore.getState();
+            await Promise.all([
+              store.fetchMetadata(currentVideoId!),
+              store.fetchTranscript(currentVideoId!),
+            ]);
+          })();
+
+          activePipelines.set(currentVideoId!, promise);
+          promise.finally(() => {
+            activePipelines.delete(currentVideoId!);
+          });
+        }
+
+        await activePipelines.get(currentVideoId!);
         if (!isMounted) return;
 
         setCompletedStepIndex(5);
@@ -114,11 +115,19 @@ export default function ProcessingPage() {
     return () => {
       isMounted = false;
     };
-    // Only re-run if the video ID itself changes; Zustand actions and
-    // navigate are stable references and must NOT be deps here — adding
-    // them would re-trigger the pipeline on every render.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentVideoId]);
+
+  // Synchronize intermediate step progress when metadata and transcript populate in Zustand store
+  useEffect(() => {
+    if (isFinished) return;
+    if (transcript) {
+      setCompletedStepIndex((prev) => Math.max(prev, 4));
+      setProgress((prev) => Math.max(prev, 80));
+    } else if (metadata) {
+      setCompletedStepIndex((prev) => Math.max(prev, 2));
+      setProgress((prev) => Math.max(prev, 50));
+    }
+  }, [metadata, transcript, isFinished]);
 
   // Automatic redirect countdown when finished
   useEffect(() => {
