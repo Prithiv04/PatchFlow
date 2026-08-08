@@ -1,17 +1,13 @@
 import re
 from typing import Any, Dict, List
+from app.services.ai_patch_service import AIPatchService
+from app.services.semantic_matcher import SemanticMatcher
 
 
 def parse_prompt(prompt: str):
     """
     Parse a declarative patch prompt to extract (target, replacement) pairs.
-
-    Supports patterns such as:
-      - "Replace X with Y"
-      - "Replace every occurrence of X with Y"
-      - "Change X to Y"
-      - "Update X to Y"
-    Returns a list of dicts: [{"target": str, "replacement": str}]
+    Maintained for backward compatibility.
     """
     patterns = [
         r'replace(?:\s+every(?:\s+occurrence\s+of)?)?\s+"([^"]+)"\s+with\s+"([^"]+)"',
@@ -32,7 +28,6 @@ def parse_prompt(prompt: str):
         for match in re.finditer(pattern, prompt_lower, re.IGNORECASE):
             target = match.group(1).strip()
             replacement = match.group(2).strip()
-            # Avoid duplicates
             if not any(p["target"].lower() == target.lower() for p in pairs):
                 pairs.append({"target": target, "replacement": replacement})
 
@@ -53,7 +48,6 @@ def analyze_text_asset(
     if not text or not target:
         return diffs
 
-    # Case-insensitive count
     pattern = re.compile(re.escape(target), re.IGNORECASE)
     if pattern.search(text):
         patched_text = pattern.sub(replacement, text)
@@ -97,52 +91,92 @@ def run_patch_analysis(
     segments: List[Dict[str, Any]],
 ) -> Dict[str, Any]:
     """
-    Run full patch analysis against transcript data.
-    Returns diffs, occurrences, affected_assets, confidence_score, and warnings.
+    Run Sprint 9 AI-powered patch analysis pipeline against transcript data:
+    1. Parse natural language intent (AIPatchService)
+    2. Perform semantic & exact matching (SemanticMatcher)
+    3. Calculate confidence and safety thresholds
+    Returns diffs, occurrences, affected_assets, confidence_score, warnings, and candidates.
     """
-    pairs = parse_prompt(prompt)
-    if not pairs:
+    intent = AIPatchService.parse_intent(prompt)
+    
+    target = intent.target
+    replacement = intent.replacement
+
+    # Fallback to legacy parser if intent service didn't find target/replacement
+    if not target or not replacement:
+        pairs = parse_prompt(prompt)
+        if pairs:
+            target = pairs[0]["target"]
+            replacement = pairs[0]["replacement"]
+
+    if not target:
         return {
             "diffs": [],
             "occurrences_count": 0,
             "affected_assets": [],
             "confidence_score": 0.0,
             "warnings": [
-                "Could not parse patch command. Use formats like: "
+                "Could not parse patch command. Use natural instructions like: "
                 "'Replace X with Y' or 'Change X to Y'."
             ],
+            "parsed_operation": intent.operation,
+            "parsed_target": "",
+            "parsed_replacement": "",
+            "candidate_segments": [],
         }
+
+    # Find candidate segment matches
+    candidates = SemanticMatcher.find_matches(
+        target=target,
+        replacement=replacement,
+        segments=segments,
+        min_threshold=0.70,
+    )
 
     all_diffs: List[Dict[str, Any]] = []
     affected_asset_types: set = set()
 
-    for pair in pairs:
-        target = pair["target"]
-        replacement = pair["replacement"]
-
-        # Analyze per-segment diffs
-        seg_diffs = analyze_transcript(segments, target, replacement)
-        all_diffs.extend(seg_diffs)
-
-        if seg_diffs:
-            affected_asset_types.add("transcript")
-            affected_asset_types.add("captions")
+    for cand in candidates:
+        all_diffs.append({
+            "asset_type": "transcript",
+            "segment_id": cand["segment_id"],
+            "start": cand["start"],
+            "end": cand["end"],
+            "original": cand["original"],
+            "patched": cand["patched"],
+            "target": cand["matched_text"] or cand["target"],
+            "replacement": replacement,
+        })
+        affected_asset_types.add("transcript")
+        affected_asset_types.add("captions")
 
     occurrences_count = len(all_diffs)
-    affected_assets = sorted(affected_asset_types)
+    affected_assets = sorted(affected_asset_types) if occurrences_count > 0 else []
 
-    # Calculate confidence based on parse success and match rate
+    # Calculate confidence score
     if occurrences_count > 0:
-        confidence_score = min(1.0, round(0.6 + (0.04 * min(occurrences_count, 10)), 2))
+        best_candidate_score = max(c["score"] for c in candidates)
+        if all(c["is_exact"] for c in candidates):
+            confidence_score = 1.0
+        else:
+            confidence_score = round(best_candidate_score, 2)
     else:
         confidence_score = 0.0
+
+    # Safety Layer: If confidence < 0.50, do not apply any modifications
+    if confidence_score < 0.50:
+        all_diffs = []
+        occurrences_count = 0
+        affected_assets = []
 
     warnings = []
     if occurrences_count > 0:
         warnings.append(
             "This patch modifies text elements only. Audio and video tracks remain unchanged."
         )
-    if occurrences_count == 0:
+        if any(not c["is_exact"] for c in candidates):
+            warnings.append("Ambiguous or semantic match detected. Please review candidate segments.")
+    else:
         warnings.append(f"No occurrences found in transcript for the given patch command.")
 
     return {
@@ -151,4 +185,8 @@ def run_patch_analysis(
         "affected_assets": affected_assets,
         "confidence_score": confidence_score,
         "warnings": warnings,
+        "parsed_operation": intent.operation,
+        "parsed_target": target,
+        "parsed_replacement": replacement,
+        "candidate_segments": candidates,
     }

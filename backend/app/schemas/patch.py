@@ -13,6 +13,20 @@ class PatchDiff(BaseModel):
     replacement: str = Field(..., description="Replacement value")
 
 
+class SegmentCandidate(BaseModel):
+    segment_id: int = Field(..., description="Segment ID")
+    start: float = Field(..., description="Start timestamp")
+    end: float = Field(..., description="End timestamp")
+    score: float = Field(..., description="Matching confidence score (0.0 to 1.0)")
+    text: str = Field(..., description="Original segment text")
+    matched_text: Optional[str] = Field(None, description="Matched substring text")
+    target: str = Field(..., description="Target pattern")
+    replacement: str = Field(..., description="Replacement text")
+    original: str = Field(..., description="Original text")
+    patched: str = Field(..., description="Patched text preview")
+    is_exact: bool = Field(True, description="Whether match is exact or semantic")
+
+
 class PatchAnalysisRequest(BaseModel):
     prompt: str = Field(
         ...,
@@ -33,6 +47,11 @@ class PatchAnalysisResponse(BaseModel):
     warnings: List[str] = Field(..., description="Review warnings for this patch")
     version: Optional[str] = Field(None, description="Assigned version tag (e.g. 'v1.1')")
     created_at: str = Field(..., description="Patch creation timestamp in UTC ISO-8601 format")
+    # Sprint 9 AI Intent & Semantic Candidate fields
+    parsed_operation: Optional[str] = Field(None, description="Parsed operation (e.g. 'replace')")
+    parsed_target: Optional[str] = Field(None, description="Parsed target text")
+    parsed_replacement: Optional[str] = Field(None, description="Parsed replacement text")
+    candidate_segments: Optional[List[SegmentCandidate]] = Field(None, description="Candidate segment matches")
 
 
 class PatchListResponse(BaseModel):

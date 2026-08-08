@@ -62,6 +62,9 @@ const itemVariants: Variants = {
   visible: { y: 0, opacity: 1, transition: { type: "spring", stiffness: 280, damping: 22 } },
 };
 
+import { PatchCandidates } from "@/components/PatchCandidates";
+import { PatchAnalysisResponse } from "@/types/api";
+
 export default function CreatePatchPage() {
   const navigate = useNavigate();
   const { currentVideoTitle, currentVideoId, setPatchCommand } = usePatchStore();
@@ -73,6 +76,8 @@ export default function CreatePatchPage() {
   const progressPercent = Math.min(100, (charCount / MAX_CHARS) * 100);
 
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [proposal, setProposal] = useState<PatchAnalysisResponse | null>(null);
+  const [selectedSegmentIds, setSelectedSegmentIds] = useState<number[]>([]);
 
   const handleAnalyze = async () => {
     if (!prompt.trim()) return;
@@ -86,14 +91,47 @@ export default function CreatePatchPage() {
       setIsAnalyzing(true);
       setPatchCommand(prompt.trim());
       const patchProposal = await patchService.analyzePatch(currentVideoId, prompt.trim());
+      setProposal(patchProposal);
       usePatchStore.getState().setActivePatch(patchProposal);
-      toast.success(`Found ${patchProposal.occurrences_count} occurrences!`);
-      navigate("/patch/preview");
+
+      const candidateIds = patchProposal.candidate_segments
+        ? patchProposal.candidate_segments.map((c) => c.segment_id)
+        : patchProposal.diffs.map((d) => d.segment_id);
+      setSelectedSegmentIds(candidateIds);
+
+      if (patchProposal.occurrences_count > 0) {
+        toast.success(`AI parsed intent & found ${patchProposal.occurrences_count} candidate(s)!`);
+      } else {
+        toast.error("No confident matches found in transcript for this command.");
+      }
     } catch (err: any) {
       toast.error(err.message || "Failed to analyze patch command");
     } finally {
       setIsAnalyzing(false);
     }
+  };
+
+  const handleToggleSegment = (segmentId: number) => {
+    setSelectedSegmentIds((prev) =>
+      prev.includes(segmentId) ? prev.filter((id) => id !== segmentId) : [...prev, segmentId]
+    );
+  };
+
+  const handleProceedToPreview = () => {
+    if (!proposal) return;
+
+    // Filter diffs based on selected candidate segments
+    if (selectedSegmentIds.length > 0 && proposal.diffs) {
+      const filteredDiffs = proposal.diffs.filter((d) => selectedSegmentIds.includes(d.segment_id));
+      const updatedProposal = {
+        ...proposal,
+        diffs: filteredDiffs,
+        occurrences_count: filteredDiffs.length,
+      };
+      usePatchStore.getState().setActivePatch(updatedProposal);
+    }
+
+    navigate("/patch/preview");
   };
 
   return (
@@ -219,7 +257,10 @@ export default function CreatePatchPage() {
                     type="button"
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
-                    onClick={() => setPrompt(sug)}
+                    onClick={() => {
+                      setPrompt(sug);
+                      setProposal(null);
+                    }}
                     className="text-xs px-2.5 py-1 rounded-lg bg-surface hover:bg-primary/15 hover:text-primary text-muted border border-border hover:border-primary/30 transition-all font-medium"
                   >
                     + {sug}
@@ -228,6 +269,20 @@ export default function CreatePatchPage() {
               </div>
             </div>
           </div>
+
+          {/* AI Patch Intent & Candidate Matches Proposal Section */}
+          {proposal && (
+            <PatchCandidates
+              operation={proposal.parsed_operation || "replace"}
+              target={proposal.parsed_target || proposal.diffs[0]?.target || ""}
+              replacement={proposal.parsed_replacement || proposal.diffs[0]?.replacement || ""}
+              confidenceScore={proposal.confidence_score}
+              candidates={proposal.candidate_segments || []}
+              affectedAssets={proposal.affected_assets}
+              selectedSegmentIds={selectedSegmentIds}
+              onToggleSegment={handleToggleSegment}
+            />
+          )}
 
           {/* Improved Detected Assets Cards */}
           <div className="glass-card rounded-2xl border border-border p-6 space-y-4 shadow-xl">
@@ -286,7 +341,10 @@ export default function CreatePatchPage() {
                     key={t.label}
                     whileHover={{ x: 3, scale: 1.01 }}
                     whileTap={{ scale: 0.99 }}
-                    onClick={() => setPrompt(t.prompt)}
+                    onClick={() => {
+                      setPrompt(t.prompt);
+                      setProposal(null);
+                    }}
                     className="w-full text-left p-3 rounded-xl glass-card hover:bg-primary/10 hover:border-primary/40 border border-border transition-all flex items-start justify-between group space-y-1"
                   >
                     <div className="space-y-1 pr-2">
@@ -326,18 +384,30 @@ export default function CreatePatchPage() {
           type="button"
           whileHover={{ scale: prompt.trim() ? 1.02 : 1 }}
           whileTap={{ scale: prompt.trim() ? 0.98 : 1 }}
-          disabled={!prompt.trim()}
+          disabled={!prompt.trim() || isAnalyzing}
           onClick={handleAnalyze}
           className={`inline-flex items-center gap-2 px-6 py-2.5 rounded-xl font-semibold text-sm transition-all shadow-glow ${
             prompt.trim()
-              ? "bg-gradient-to-r from-primary to-purple-600 hover:from-primary-hover hover:to-purple-700 text-white cursor-pointer active:scale-[0.98]"
+              ? "bg-surface hover:bg-primary/20 text-primary border border-primary/30 cursor-pointer"
               : "bg-surface text-muted border border-border opacity-50 cursor-not-allowed"
           }`}
         >
           <Sparkles className="w-4 h-4" />
-          <span>Analyze Patch</span>
-          <ArrowRight className="w-4 h-4" />
+          <span>{isAnalyzing ? "Analyzing..." : "Analyze Patch Intent"}</span>
         </motion.button>
+
+        {proposal && proposal.occurrences_count > 0 && (
+          <motion.button
+            type="button"
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={handleProceedToPreview}
+            className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl font-semibold text-sm transition-all shadow-glow bg-gradient-to-r from-primary to-purple-600 hover:from-primary-hover hover:to-purple-700 text-white cursor-pointer active:scale-[0.98]"
+          >
+            <span>Proceed to Preview ({selectedSegmentIds.length} candidate(s))</span>
+            <ArrowRight className="w-4 h-4" />
+          </motion.button>
+        )}
       </motion.div>
     </motion.div>
   );

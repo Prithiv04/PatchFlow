@@ -25,13 +25,37 @@ from app.utils.patch_analyzer import run_patch_analysis
 from app.utils.patch_executor import apply_patch_to_srt, apply_patch_to_transcript
 
 
-def _build_response(patch: Patch) -> PatchAnalysisResponse:
+def _build_response(patch: Patch, analysis_dict: Optional[dict] = None) -> PatchAnalysisResponse:
     """Convert a Patch ORM object into a PatchAnalysisResponse schema."""
     diffs_raw = json.loads(patch.diffs_json or "[]")
     warnings_raw = json.loads(patch.warnings_json or "[]")
     affected_assets_raw = json.loads(patch.affected_assets_json or "[]")
 
     diffs = [PatchDiff(**d) for d in diffs_raw]
+
+    parsed_op = analysis_dict.get("parsed_operation") if analysis_dict else "replace"
+    parsed_tgt = analysis_dict.get("parsed_target") if analysis_dict else (diffs[0].target if diffs else "")
+    parsed_repl = analysis_dict.get("parsed_replacement") if analysis_dict else (diffs[0].replacement if diffs else "")
+
+    if analysis_dict and "candidate_segments" in analysis_dict:
+        candidate_segs = analysis_dict["candidate_segments"]
+    else:
+        candidate_segs = [
+            {
+                "segment_id": d.segment_id,
+                "start": d.start,
+                "end": d.end,
+                "score": patch.confidence_score,
+                "text": d.original,
+                "matched_text": d.target,
+                "target": d.target,
+                "replacement": d.replacement,
+                "original": d.original,
+                "patched": d.patched,
+                "is_exact": True,
+            }
+            for d in diffs
+        ]
 
     return PatchAnalysisResponse(
         patch_id=patch.id,
@@ -45,6 +69,10 @@ def _build_response(patch: Patch) -> PatchAnalysisResponse:
         warnings=warnings_raw,
         version=patch.version,
         created_at=patch.created_at.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        parsed_operation=parsed_op,
+        parsed_target=parsed_tgt,
+        parsed_replacement=parsed_repl,
+        candidate_segments=candidate_segs,
     )
 
 
@@ -116,7 +144,7 @@ class PatchService:
             analysis["occurrences_count"],
         )
 
-        return _build_response(patch)
+        return _build_response(patch, analysis)
 
     @staticmethod
     async def list_patches(db: Session, video_id: str) -> PatchListResponse:

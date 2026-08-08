@@ -55,6 +55,20 @@ export interface PatchDiff {
   replacement: string;
 }
 
+export interface SegmentCandidate {
+  segment_id: number;
+  start: number;
+  end: number;
+  score: number;
+  text: string;
+  matched_text?: string;
+  target: string;
+  replacement: string;
+  original: string;
+  patched: string;
+  is_exact: boolean;
+}
+
 export interface PatchAnalysisResponse {
   patch_id: string;
   video_id: string;
@@ -67,6 +81,10 @@ export interface PatchAnalysisResponse {
   warnings: string[];
   version: string | null;
   created_at: string;
+  parsed_operation?: string;
+  parsed_target?: string;
+  parsed_replacement?: string;
+  candidate_segments?: SegmentCandidate[];
 }
 
 export interface HistoryTimelineEntry {
