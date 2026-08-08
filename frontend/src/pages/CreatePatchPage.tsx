@@ -24,6 +24,8 @@ import {
   Eraser
 } from "lucide-react";
 import { usePatchStore } from "@/store/usePatchStore";
+import toast from "react-hot-toast";
+import { patchService } from "@/services/patchService";
 
 const MAX_CHARS = 500;
 
@@ -70,10 +72,28 @@ export default function CreatePatchPage() {
   const wordCount = prompt.trim() ? prompt.trim().split(/\s+/).length : 0;
   const progressPercent = Math.min(100, (charCount / MAX_CHARS) * 100);
 
-  const handleAnalyze = () => {
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+
+  const handleAnalyze = async () => {
     if (!prompt.trim()) return;
-    setPatchCommand(prompt.trim());
-    navigate("/patch/preview");
+    if (!currentVideoId) {
+      toast.error("Please upload or select a video asset first.");
+      navigate("/import");
+      return;
+    }
+
+    try {
+      setIsAnalyzing(true);
+      setPatchCommand(prompt.trim());
+      const patchProposal = await patchService.analyzePatch(currentVideoId, prompt.trim());
+      usePatchStore.getState().setActivePatch(patchProposal);
+      toast.success(`Found ${patchProposal.occurrences_count} occurrences!`);
+      navigate("/patch/preview");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to analyze patch command");
+    } finally {
+      setIsAnalyzing(false);
+    }
   };
 
   return (

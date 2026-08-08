@@ -4,6 +4,8 @@ import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { FileCode2, Sparkles, Video, FileText, MessageSquare, Subtitles, CheckCircle2, ChevronRight, Wand2, LayoutTemplate, ArrowRight, Lightbulb, DollarSign, Link2, Calendar, Building2, TrendingUp, Tag, Eraser } from "lucide-react";
 import { usePatchStore } from "@/store/usePatchStore";
+import toast from "react-hot-toast";
+import { patchService } from "@/services/patchService";
 const MAX_CHARS = 500;
 const TEMPLATES = [
     { label: "Replace Product Name", prompt: 'Replace every occurrence of "GPT-4" with "GPT-5".', icon: Tag, category: "Text Swap" },
@@ -41,11 +43,29 @@ export default function CreatePatchPage() {
     const charCount = prompt.length;
     const wordCount = prompt.trim() ? prompt.trim().split(/\s+/).length : 0;
     const progressPercent = Math.min(100, (charCount / MAX_CHARS) * 100);
-    const handleAnalyze = () => {
+    const [isAnalyzing, setIsAnalyzing] = useState(false);
+    const handleAnalyze = async () => {
         if (!prompt.trim())
             return;
-        setPatchCommand(prompt.trim());
-        navigate("/patch/preview");
+        if (!currentVideoId) {
+            toast.error("Please upload or select a video asset first.");
+            navigate("/import");
+            return;
+        }
+        try {
+            setIsAnalyzing(true);
+            setPatchCommand(prompt.trim());
+            const patchProposal = await patchService.analyzePatch(currentVideoId, prompt.trim());
+            usePatchStore.getState().setActivePatch(patchProposal);
+            toast.success(`Found ${patchProposal.occurrences_count} occurrences!`);
+            navigate("/patch/preview");
+        }
+        catch (err) {
+            toast.error(err.message || "Failed to analyze patch command");
+        }
+        finally {
+            setIsAnalyzing(false);
+        }
     };
     return (_jsxs(motion.div, { variants: containerVariants, initial: "hidden", animate: "visible", className: "max-w-5xl mx-auto space-y-8 pb-16", children: [_jsxs(motion.div, { variants: itemVariants, className: "space-y-2", children: [_jsxs("div", { className: "inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs font-semibold text-primary shadow-glow", children: [_jsx(FileCode2, { className: "w-3.5 h-3.5" }), _jsx("span", { children: "Create Patch Workflow" })] }), _jsx("h1", { className: "text-3xl md:text-4xl font-extrabold text-text tracking-tight", children: "Define Your Patch Command" }), _jsx("p", { className: "text-muted text-sm md:text-base", children: "Describe the text, transcript, or caption changes to execute across all video assets." })] }), _jsxs(motion.div, { variants: itemVariants, className: "glass-card rounded-2xl p-4 border border-border flex items-center justify-between gap-4 shadow-xl", children: [_jsxs("div", { className: "flex items-center gap-4 truncate", children: [_jsx("div", { className: "w-10 h-10 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400 shrink-0 shadow-glow", children: _jsx(Video, { className: "w-5 h-5" }) }), _jsxs("div", { className: "truncate", children: [_jsx("p", { className: "text-xs text-muted font-semibold uppercase tracking-wider", children: "Patching Target Video" }), _jsx("p", { className: "text-sm font-bold text-text truncate", children: currentVideoTitle })] })] }), _jsxs("div", { className: "flex items-center gap-2 shrink-0", children: [_jsxs("span", { className: "px-2.5 py-1 rounded-lg text-[11px] font-mono font-medium bg-surface text-muted border border-border", children: ["ID: ", currentVideoId] }), _jsx("span", { className: "px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hidden sm:inline-block", children: "4 Assets Ready" })] })] }), _jsxs("div", { className: "grid grid-cols-1 lg:grid-cols-3 gap-8", children: [_jsxs(motion.div, { variants: itemVariants, className: "lg:col-span-2 space-y-6", children: [_jsxs("div", { className: "glass-card rounded-2xl border border-border p-6 space-y-4 shadow-2xl relative", children: [_jsxs("div", { className: "flex items-center justify-between", children: [_jsxs("div", { className: "flex items-center gap-2", children: [_jsx(Wand2, { className: "w-5 h-5 text-primary" }), _jsx("h2", { className: "font-bold text-text text-base", children: "Natural Language Patch Prompt" })] }), prompt && (_jsxs("button", { type: "button", onClick: () => setPrompt(""), className: "text-xs text-muted hover:text-rose-400 flex items-center gap-1 transition px-2 py-1 rounded-md hover:bg-white/5", children: [_jsx(Eraser, { className: "w-3.5 h-3.5" }), " Clear prompt"] }))] }), _jsxs(motion.div, { animate: {
                                             boxShadow: focused

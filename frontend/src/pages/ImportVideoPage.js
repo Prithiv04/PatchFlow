@@ -2,6 +2,9 @@ import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
 import { useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
+import toast from "react-hot-toast";
+import { uploadService } from "../services/uploadService";
+import { usePatchStore } from "../store/usePatchStore";
 import { Upload, FileVideo, X, CheckCircle2, Film, Sparkles, FolderOpen, MessageSquare, FileText, Tag, Loader2 } from "lucide-react";
 const CATEGORIES = [
     "Tutorial",
@@ -64,23 +67,28 @@ export default function ImportVideoPage() {
         fileInputRef.current?.click();
     };
     // Start simulated upload modal
-    const handleStartUpload = () => {
+    const handleStartUpload = async () => {
         if (!selectedFile)
             return;
         setIsUploading(true);
         setUploadProgress(0);
-        const interval = setInterval(() => {
-            setUploadProgress((prev) => {
-                if (prev >= 100) {
-                    clearInterval(interval);
-                    setTimeout(() => {
-                        navigate("/processing");
-                    }, 400);
-                    return 100;
-                }
-                return prev + 5;
+        try {
+            const uploadData = await uploadService.uploadVideo(selectedFile, (pct) => {
+                setUploadProgress(pct);
             });
-        }, 120);
+            usePatchStore.getState().setUploadData(uploadData);
+            if (title) {
+                usePatchStore.getState().setCurrentVideoId(uploadData.video_id, title);
+            }
+            toast.success("Video uploaded successfully!");
+            setTimeout(() => {
+                navigate("/processing");
+            }, 400);
+        }
+        catch (err) {
+            toast.error(err.message || "Failed to upload video");
+            setIsUploading(false);
+        }
     };
     return (_jsxs("div", { className: "max-w-4xl mx-auto space-y-8 pb-16", children: [_jsxs("div", { className: "space-y-2", children: [_jsxs("div", { className: "inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs font-semibold text-primary", children: [_jsx(Sparkles, { className: "w-3.5 h-3.5" }), _jsx("span", { children: "New Video Asset" })] }), _jsx("h1", { className: "text-3xl md:text-4xl font-extrabold text-text tracking-tight", children: "Import Video" }), _jsx("p", { className: "text-muted text-sm md:text-base", children: "Upload a video and its associated metadata to start creating patches." })] }), _jsxs(motion.div, { initial: { opacity: 0, y: 15 }, animate: { opacity: 1, y: 0 }, className: "glass-card rounded-2xl p-6 md:p-8 space-y-6 border border-border", children: [_jsxs("h2", { className: "text-lg font-bold text-text flex items-center gap-2", children: [_jsx(Film, { className: "w-5 h-5 text-primary" }), "Video Asset File"] }), _jsx("input", { ref: fileInputRef, type: "file", accept: "video/mp4,video/quicktime,video/x-msvideo,video/x-matroska", onChange: handleFileChange, className: "hidden" }), !selectedFile ? (_jsxs(motion.div, { onDragOver: handleDragOver, onDragLeave: handleDragLeave, onDrop: handleDrop, onClick: openFilePicker, animate: {
                             scale: isDragging ? 1.01 : 1,

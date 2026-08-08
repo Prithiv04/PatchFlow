@@ -11,7 +11,7 @@ export interface Video {
 
 export const mockVideos: Video[] = [
   {
-    id: "vid-1",
+    id: "demo-video-101",
     title: "Product Overview & Onboarding 2026",
     duration: "4:15",
     version: "v2.4",
@@ -21,7 +21,7 @@ export const mockVideos: Video[] = [
     patchesCount: 5,
   },
   {
-    id: "vid-2",
+    id: "demo-video-102",
     title: "API Auth Flow Walkthrough",
     duration: "8:42",
     version: "v1.8",
@@ -31,7 +31,7 @@ export const mockVideos: Video[] = [
     patchesCount: 3,
   },
   {
-    id: "vid-3",
+    id: "demo-video-103",
     title: "Quarterly Financial Analysis Demo",
     duration: "12:05",
     version: "v3.1",
@@ -41,7 +41,7 @@ export const mockVideos: Video[] = [
     patchesCount: 8,
   },
   {
-    id: "vid-4",
+    id: "demo-video-104",
     title: "UI System Components Overview",
     duration: "6:30",
     version: "v1.0",

@@ -74,13 +74,15 @@ const itemVariants: Variants = {
 
 export default function PreviewPage() {
   const navigate = useNavigate();
-  const { currentPatchCommand, currentVideoTitle } = usePatchStore();
+  const { currentPatchCommand, currentVideoTitle, activePatch } = usePatchStore();
 
   const [copied, setCopied] = useState(false);
   const [collapsedFiles, setCollapsedFiles] = useState<Record<string, boolean>>({});
 
-  const displayCommand = currentPatchCommand?.trim() || 'Replace every occurrence of "GPT-4" with "GPT-5".';
-  const totalOccurrences = MOCK_DIFFS.reduce((acc, d) => acc + d.changes.length, 0);
+  const displayCommand = activePatch?.prompt || currentPatchCommand?.trim() || 'Replace every occurrence of "GPT-4" with "GPT-5".';
+  const totalOccurrences = activePatch ? activePatch.occurrences_count : MOCK_DIFFS.reduce((acc, d) => acc + d.changes.length, 0);
+  const confidenceText = activePatch ? `${(activePatch.confidence_score * 100).toFixed(1)}%` : "98.4%";
+  const affectedAssetsCount = activePatch ? activePatch.affected_assets.length : MOCK_DIFFS.length;
 
   const handleCopyCommand = () => {
     navigator.clipboard.writeText(displayCommand);
@@ -150,10 +152,10 @@ export default function PreviewPage() {
       {/* Summary Metrics Cards */}
       <motion.div variants={itemVariants} className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { label: "Assets Affected", value: MOCK_DIFFS.length, detail: "4 Files Verified", icon: Layers, color: "text-purple-400 bg-purple-500/10 border-purple-500/20" },
-          { label: "Occurrences", value: totalOccurrences, detail: "7 Matches Replaced", icon: Target, color: "text-blue-400 bg-blue-500/10 border-blue-500/20" },
-          { label: "AI Confidence", value: "98.4%", detail: "High Precision Match", icon: ShieldCheck, color: "text-emerald-400 bg-emerald-500/10 border-emerald-500/20" },
-          { label: "Est. Render Time", value: "~4s", detail: "0s Audio Re-render", icon: Clock, color: "text-amber-400 bg-amber-500/10 border-amber-500/20" },
+          { label: "Assets Affected", value: affectedAssetsCount, detail: `${affectedAssetsCount} Stream Assets`, icon: Layers, color: "text-purple-400 bg-purple-500/10 border-purple-500/20" },
+          { label: "Occurrences", value: totalOccurrences, detail: `${totalOccurrences} Replaced`, icon: Target, color: "text-blue-400 bg-blue-500/10 border-blue-500/20" },
+          { label: "AI Confidence", value: confidenceText, detail: "FastAPI Precision Score", icon: ShieldCheck, color: "text-emerald-400 bg-emerald-500/10 border-emerald-500/20" },
+          { label: "Est. Render Time", value: "~1s", detail: "In-memory Replacement", icon: Clock, color: "text-amber-400 bg-amber-500/10 border-amber-500/20" },
         ].map(({ label, value, detail, icon: Icon, color }) => (
           <motion.div
             key={label}

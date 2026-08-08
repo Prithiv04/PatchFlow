@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { motion, Variants } from "framer-motion";
 import { Link } from "react-router-dom";
 import {
@@ -18,9 +18,14 @@ import {
   ShieldCheck,
   ChevronRight,
   Activity,
+  Download,
+  Film,
 } from "lucide-react";
 import { mockVideos } from "@/mocks/videos";
 import { mockPatchActivities } from "@/mocks/patches";
+import { usePatchStore } from "@/store/usePatchStore";
+import { getStaticAssetUrl } from "@/services/api";
+import { exportService } from "@/services/exportService";
 
 // Animation Variants
 const containerVariants: Variants = {
@@ -48,6 +53,13 @@ const cardHoverProps = {
 };
 
 export default function DashboardPage() {
+  const { currentVideoId, currentVideoTitle, metadata, fetchMetadata } = usePatchStore();
+
+  useEffect(() => {
+    if (currentVideoId && !metadata) {
+      fetchMetadata(currentVideoId);
+    }
+  }, [currentVideoId, metadata, fetchMetadata]);
   return (
     <motion.div
       variants={containerVariants}
@@ -213,6 +225,73 @@ export default function DashboardPage() {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {currentVideoId && (
+              <motion.div
+                key={currentVideoId}
+                {...cardHoverProps}
+                className="glass-card glass-card-hover rounded-2xl overflow-hidden group flex flex-col justify-between border border-primary/40 bg-gradient-to-br from-primary/10 via-card to-card h-full"
+              >
+                {/* Thumbnail Header */}
+                <div className="relative h-36 w-full overflow-hidden bg-surface">
+                  {metadata?.thumbnail ? (
+                    <img
+                      src={getStaticAssetUrl(metadata.thumbnail)}
+                      alt={currentVideoTitle}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 opacity-90"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center bg-primary/20 text-primary font-bold">
+                      <Film className="w-10 h-10 animate-pulse" />
+                    </div>
+                  )}
+                  <div className="absolute inset-0 bg-gradient-to-t from-card via-transparent to-transparent" />
+
+                  <div className="absolute top-3 left-3 px-2 py-0.5 rounded-md bg-primary text-[11px] font-bold text-white shadow-glow">
+                    ACTIVE LIVE ASSET
+                  </div>
+
+                  <div className="absolute bottom-2 right-2 px-2 py-0.5 rounded bg-black/80 text-[11px] font-mono text-muted border border-white/10">
+                    {metadata ? `${Math.round(metadata.duration)}s` : "Live"}
+                  </div>
+
+                  <Link
+                    to={`/video/${currentVideoId}`}
+                    className="absolute inset-0 m-auto w-11 h-11 rounded-full bg-primary hover:bg-primary-hover text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all scale-75 group-hover:scale-100 shadow-glow"
+                  >
+                    <Play className="w-4.5 h-4.5 fill-white ml-0.5" />
+                  </Link>
+                </div>
+
+                {/* Info Content */}
+                <div className="p-4 space-y-3 flex-1 flex flex-col justify-between">
+                  <div>
+                    <h3 className="font-semibold text-sm text-text line-clamp-1 group-hover:text-primary transition-colors">
+                      {currentVideoTitle}
+                    </h3>
+                    <div className="flex items-center justify-between text-xs text-muted mt-1.5 font-mono">
+                      <span>{metadata?.resolution || "Processed"}</span>
+                      <span>{metadata?.video_codec || "WAV Audio"}</span>
+                    </div>
+                  </div>
+
+                  <div className="pt-3 border-t border-border/50 flex items-center justify-between">
+                    <button
+                      onClick={() => exportService.downloadAsset(currentVideoId, "package")}
+                      className="inline-flex items-center gap-1.5 text-xs text-primary font-semibold hover:underline"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      Download ZIP
+                    </button>
+                    <Link
+                      to={`/video/${currentVideoId}`}
+                      className="text-xs font-semibold text-primary flex items-center gap-0.5 transition"
+                    >
+                      Details <ArrowUpRight className="w-3.5 h-3.5" />
+                    </Link>
+                  </div>
+                </div>
+              </motion.div>
+            )}
             {mockVideos.map((vid) => (
               <motion.div
                 key={vid.id}

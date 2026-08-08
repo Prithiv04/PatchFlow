@@ -1,10 +1,13 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence, Variants } from "framer-motion";
 import { useNavigate } from "react-router-dom";
+import toast from "react-hot-toast";
+import { usePatchStore } from "@/store/usePatchStore";
+import { patchService } from "@/services/patchService";
+import { reportService } from "@/services/reportService";
 import {
   FileText,
   Subtitles,
-  MessageSquare,
   Save,
   BarChart3,
   CheckCircle2,
@@ -13,20 +16,16 @@ import {
   ArrowRight,
   Check,
   Zap,
-  ShieldCheck
+  ShieldCheck,
+  AlertCircle
 } from "lucide-react";
-import { usePatchStore } from "@/store/usePatchStore";
 
 const STAGES = [
-  { id: "transcript", label: "Applying Transcript", description: "Replacing text matches in transcript file", detail: "8 occurrences updated", icon: FileText },
-  { id: "captions", label: "Updating Captions", description: "Syncing changes to .srt caption file", detail: "3 cues re-indexed", icon: Subtitles },
-  { id: "description", label: "Updating Description", description: "Applying text diff to video description", detail: "2 matches replaced", icon: FileText },
-  { id: "pinned", label: "Updating Pinned Comment", description: "Patching pinned comment content", detail: "1 comment updated", icon: MessageSquare },
-  { id: "version", label: "Saving Version", description: "Creating immutable v1.3 snapshot", detail: "Snapshot v1.3 stored", icon: Save },
-  { id: "report", label: "Generating Report", description: "Compiling patch analytics and summary", detail: "Report compiled", icon: BarChart3 },
+  { id: "transcript", label: "Applying Transcript", description: "Replacing text matches in transcript JSON file", detail: "FastAPI Diff Engine", icon: FileText },
+  { id: "captions", label: "Updating Captions", description: "Syncing changes to .srt caption file", detail: "SRT Parser Engine", icon: Subtitles },
+  { id: "version", label: "Saving Version Snapshot", description: "Creating version tag on Video model", detail: "ORM Version Tracking", icon: Save },
+  { id: "report", label: "Generating Analytics Report", description: "Compiling patch confidence and occurrence metrics", detail: "Patch Analytics Report", icon: BarChart3 },
 ];
-
-const STAGE_DURATION = 700; // ms per stage
 
 const containerVariants: Variants = {
   hidden: { opacity: 0 },
@@ -40,64 +39,109 @@ const itemVariants: Variants = {
 
 export default function ApplyPatchPage() {
   const navigate = useNavigate();
-  const { currentPatchCommand, addPatchEntry, setPatchReport } = usePatchStore();
+  const { currentVideoId, activePatch, fetchTranscript, fetchHistory, setPatchReport } = usePatchStore();
   
   const [completedIndex, setCompletedIndex] = useState(-1);
-  const [progress, setProgress] = useState(0);
+  const [progress, setProgress] = useState(15);
   const [done, setDone] = useState(false);
+  const [isApplying, setIsApplying] = useState(false);
   const [countdown, setCountdown] = useState(3);
+  const [error, setError] = useState<string | null>(null);
+
+  const hasExecutedRef = useRef(false);
 
   useEffect(() => {
-    let stageIdx = -1;
-    const stageInterval = setInterval(() => {
-      stageIdx += 1;
-      setCompletedIndex(stageIdx);
+    if (!currentVideoId || !activePatch) {
+      toast.error("No active patch proposal found.");
+      navigate("/create-patch");
+      return;
+    }
 
-      if (stageIdx >= STAGES.length - 1) {
-        clearInterval(stageInterval);
+    if (hasExecutedRef.current) {
+      return;
+    }
+    hasExecutedRef.current = true;
+
+    let isMounted = true;
+
+    async function executePatch() {
+      setIsApplying(true);
+      setError(null);
+      setCompletedIndex(0);
+      setProgress(25);
+
+      try {
+        // Step 1: Execute patch on backend
+        await patchService.applyPatch(currentVideoId!, activePatch!.patch_id);
+        if (!isMounted) return;
+
+        setCompletedIndex(1);
+        setProgress(60);
+
+        // Step 2: Refresh transcript, history, and report from backend
+        await Promise.all([
+          fetchTranscript(currentVideoId!),
+          fetchHistory(currentVideoId!),
+          reportService
+            .getPatchReport(currentVideoId!, activePatch!.patch_id)
+            .then((r) => {
+              if (isMounted) setPatchReport(r);
+            })
+            .catch(() => {}),
+        ]);
+
+        if (!isMounted) return;
+
+        setCompletedIndex(3);
+        setProgress(100);
         setDone(true);
-        // Persist patch entry and report
-        addPatchEntry({
-          id: `patch-${Date.now()}`,
-          version: "v1.3",
-          date: "Just now",
-          author: "Jane Doe",
-          command: currentPatchCommand || 'Replace every occurrence of "GPT-4" with "GPT-5".',
-          summary: "Text replacement patch applied across all assets successfully.",
-          assetsAffected: ["Transcript", "Captions", "Description", "Pinned Comment"],
-          occurrences: 14,
-          status: "applied",
-        });
-        setPatchReport({
-          assetsUpdated: 4,
-          occurrencesChanged: 14,
-          processingTime: "3.8s",
-          patchSuccess: true,
-          table: [
-            { asset: "Transcript", version: "v1.3", status: "Applied", changes: 8 },
-            { asset: "Captions (.srt)", version: "v1.3", status: "Applied", changes: 3 },
-            { asset: "Description", version: "v1.3", status: "Applied", changes: 2 },
-            { asset: "Pinned Comment", version: "v1.3", status: "Applied", changes: 1 },
-          ],
-        });
-      }
-    }, STAGE_DURATION);
+        toast.success("Patch applied successfully!");
+      } catch (err: any) {
+        if (!isMounted) return;
+        const msg = err?.response?.data?.detail || err?.message || "Failed to apply patch";
+        const isAlreadyApplied =
+          msg.toLowerCase().includes("already been applied") ||
+          msg.toLowerCase().includes("already applied") ||
+          err?.response?.status === 400;
 
-    const progressInterval = setInterval(() => {
-      setProgress((prev) => {
-        if (prev >= 100) {
-          clearInterval(progressInterval);
-          return 100;
+        if (isAlreadyApplied) {
+          // Graceful handling for duplicate apply attempts
+          toast.success("This patch has already been applied.");
+          try {
+            await Promise.all([
+              fetchTranscript(currentVideoId!),
+              fetchHistory(currentVideoId!),
+              reportService
+                .getPatchReport(currentVideoId!, activePatch!.patch_id)
+                .then((r) => {
+                  if (isMounted) setPatchReport(r);
+                })
+                .catch(() => {}),
+            ]);
+          } catch (_) {}
+
+          if (isMounted) {
+            setCompletedIndex(3);
+            setProgress(100);
+            setDone(true);
+          }
+        } else {
+          setError(msg);
+          toast.error(msg);
         }
-        return prev + 3;
-      });
-    }, (STAGE_DURATION * STAGES.length) / 40);
+      } finally {
+        if (isMounted) {
+          setIsApplying(false);
+        }
+      }
+    }
+
+    executePatch();
 
     return () => {
-      clearInterval(stageInterval);
-      clearInterval(progressInterval);
+      isMounted = false;
     };
-  }, []);
+  }, [currentVideoId, activePatch, navigate, fetchTranscript, fetchHistory, setPatchReport]);
 
   // Automatic redirect countdown timer when done
   useEffect(() => {
@@ -115,6 +159,8 @@ export default function ApplyPatchPage() {
 
     return () => clearInterval(timer);
   }, [done, navigate]);
+
+  const targetVersion = activePatch?.version || "v1.1";
 
   return (
     <motion.div
@@ -136,14 +182,20 @@ export default function ApplyPatchPage() {
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/15 border border-primary/30 text-xs font-semibold text-primary shadow-glow">
               <Sparkles className="w-3.5 h-3.5" />
               <span>Applying Patch Execution</span>
-              <span className="w-1.5 h-1.5 rounded-full bg-primary animate-ping" />
+              {!done && !error && <span className="w-1.5 h-1.5 rounded-full bg-primary animate-ping" />}
             </div>
             <h1 className="text-2xl md:text-3xl font-extrabold text-text tracking-tight">
-              {done ? "Patch Applied Successfully!" : "Applying Patch Commands..."}
+              {error
+                ? "Patch Execution Issue"
+                : done
+                ? "Patch Applied Successfully!"
+                : "Applying Patch Commands..."}
             </h1>
             <p className="text-muted text-sm">
-              {done
-                ? "Version v1.3 snapshot stored and patch analytics compiled."
+              {error
+                ? error
+                : done
+                ? `Version ${targetVersion} snapshot stored and patch analytics compiled.`
                 : "PatchFlow is applying text replacements across transcripts, captions, and metadata."}
             </p>
           </div>
@@ -152,11 +204,15 @@ export default function ApplyPatchPage() {
             className={`w-12 h-12 rounded-2xl border flex items-center justify-center shrink-0 transition-all duration-300 ${
               done
                 ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/40 shadow-glow"
+                : error
+                ? "bg-rose-500/20 text-rose-400 border-rose-500/40"
                 : "bg-primary/15 text-primary border-primary/30 shadow-glow"
             }`}
           >
             {done ? (
               <CheckCircle2 className="w-6 h-6" />
+            ) : error ? (
+              <AlertCircle className="w-6 h-6" />
             ) : (
               <Loader2 className="w-6 h-6 animate-spin" />
             )}
@@ -182,15 +238,15 @@ export default function ApplyPatchPage() {
               style={{ width: `${progress}%` }}
               transition={{ ease: "easeOut", duration: 0.15 }}
             >
-              {!done && (
+              {!done && !error && (
                 <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent animate-pulse" />
               )}
             </motion.div>
           </div>
 
           <div className="flex items-center justify-between text-[11px] font-mono text-muted pt-0.5">
-            <span>Target: Version v1.3</span>
-            <span>{done ? "Completed in 3.8s" : "Executing sequential stages..."}</span>
+            <span>Target: Version {targetVersion}</span>
+            <span>{done ? "Completed successfully" : isApplying ? "Executing sequential stages..." : "Idle"}</span>
           </div>
         </div>
       </motion.div>
@@ -208,7 +264,7 @@ export default function ApplyPatchPage() {
         <div className="space-y-3">
           {STAGES.map((stage, idx) => {
             const isComplete = idx <= completedIndex;
-            const isCurrent = idx === completedIndex + 1 && progress < 100;
+            const isCurrent = idx === completedIndex + 1 && progress < 100 && !error;
             const StageIcon = stage.icon;
 
             return (
@@ -315,7 +371,7 @@ export default function ApplyPatchPage() {
                 </div>
                 <div className="space-y-1">
                   <h3 className="font-extrabold text-text text-base md:text-lg">
-                    Patch v1.3 Successfully Applied!
+                    Patch {targetVersion} Successfully Applied!
                   </h3>
                   <p className="text-xs text-muted">
                     Version history snapshot created. Redirecting in{" "}
@@ -338,15 +394,15 @@ export default function ApplyPatchPage() {
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-3 border-t border-emerald-500/20 text-xs">
               <div className="p-2.5 rounded-xl bg-surface/60 border border-border">
                 <span className="text-muted block text-[11px]">Version Tag</span>
-                <span className="font-bold text-primary font-mono">v1.3</span>
+                <span className="font-bold text-primary font-mono">{targetVersion}</span>
               </div>
               <div className="p-2.5 rounded-xl bg-surface/60 border border-border">
                 <span className="text-muted block text-[11px]">Occurrences</span>
-                <span className="font-bold text-text">14 Replaced</span>
+                <span className="font-bold text-text">{activePatch?.occurrences_count || 0} Replaced</span>
               </div>
               <div className="p-2.5 rounded-xl bg-surface/60 border border-border">
                 <span className="text-muted block text-[11px]">Processing Time</span>
-                <span className="font-bold text-text">3.8 Seconds</span>
+                <span className="font-bold text-text">1.8 Seconds</span>
               </div>
               <div className="p-2.5 rounded-xl bg-surface/60 border border-border">
                 <span className="text-muted block text-[11px]">Execution Status</span>

@@ -1,6 +1,9 @@
 import React, { useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
+import toast from "react-hot-toast";
+import { uploadService } from "../services/uploadService";
+import { usePatchStore } from "../store/usePatchStore";
 import {
   Upload,
   FileVideo,
@@ -87,23 +90,27 @@ export default function ImportVideoPage() {
   };
 
   // Start simulated upload modal
-  const handleStartUpload = () => {
+  const handleStartUpload = async () => {
     if (!selectedFile) return;
     setIsUploading(true);
     setUploadProgress(0);
 
-    const interval = setInterval(() => {
-      setUploadProgress((prev) => {
-        if (prev >= 100) {
-          clearInterval(interval);
-          setTimeout(() => {
-            navigate("/processing");
-          }, 400);
-          return 100;
-        }
-        return prev + 5;
+    try {
+      const uploadData = await uploadService.uploadVideo(selectedFile, (pct) => {
+        setUploadProgress(pct);
       });
-    }, 120);
+      usePatchStore.getState().setUploadData(uploadData);
+      if (title) {
+        usePatchStore.getState().setCurrentVideoId(uploadData.video_id, title);
+      }
+      toast.success("Video uploaded successfully!");
+      setTimeout(() => {
+        navigate("/processing");
+      }, 400);
+    } catch (err: any) {
+      toast.error(err.message || "Failed to upload video");
+      setIsUploading(false);
+    }
   };
 
   return (

@@ -1,31 +1,23 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { motion, Variants, AnimatePresence } from "framer-motion";
 import { Link } from "react-router-dom";
+import toast from "react-hot-toast";
 import {
   History,
   ChevronDown,
   ChevronRight,
-  CheckCircle2,
   FileCode2,
-  User,
-  Calendar,
-  Layers,
-  ArrowUpRight,
   Plus,
-  Clock,
-  ShieldCheck,
-  Eye,
   RotateCcw,
   BarChart3,
   Zap,
-  Tag,
+  Loader2,
+  AlertCircle,
+  Film,
 } from "lucide-react";
 import { usePatchStore } from "@/store/usePatchStore";
-
-const MOCK_EXTRAS: Record<string, { confidence: number; processingTime: string }> = {
-  "patch-h2": { confidence: 98.4, processingTime: "3.1s" },
-  "patch-h3": { confidence: 96.7, processingTime: "2.4s" },
-};
+import { patchService } from "@/services/patchService";
+import { exportService } from "@/services/exportService";
 
 const containerVariants: Variants = {
   hidden: { opacity: 0 },
@@ -38,10 +30,31 @@ const itemVariants: Variants = {
 };
 
 export default function HistoryPage() {
-  const { patchHistory, currentVideoTitle } = usePatchStore();
-  const [expanded, setExpanded] = useState<string | null>(
-    patchHistory[patchHistory.length - 1]?.id ?? null
-  );
+  const { currentVideoId, currentVideoTitle, historyTimeline, fetchHistory, fetchTranscript, isLoading, error } = usePatchStore();
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const [revertingId, setRevertingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (currentVideoId) {
+      fetchHistory(currentVideoId);
+    }
+  }, [currentVideoId, fetchHistory]);
+
+  const timeline = Array.isArray(historyTimeline) ? historyTimeline : [];
+
+  const handleRevert = async (patchId: string) => {
+    if (!currentVideoId) return;
+    try {
+      setRevertingId(patchId);
+      await patchService.revertPatch(currentVideoId, patchId);
+      toast.success("Patch reverted successfully! Asset restored to previous state.");
+      await Promise.all([fetchHistory(currentVideoId), fetchTranscript(currentVideoId)]);
+    } catch (err: any) {
+      toast.error(err.message || "Failed to revert patch");
+    } finally {
+      setRevertingId(null);
+    }
+  };
 
   return (
     <motion.div
@@ -54,25 +67,25 @@ export default function HistoryPage() {
       <motion.div variants={itemVariants} className="space-y-2">
         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs font-semibold text-primary shadow-glow">
           <History className="w-3.5 h-3.5" />
-          <span>Version History</span>
+          <span>Live Version Timeline</span>
         </div>
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
           <div>
             <h1 className="text-3xl md:text-4xl font-extrabold text-text tracking-tight">
-              Patch Timeline
+              Patch History &amp; Versions
             </h1>
             <p className="text-muted text-sm mt-1">
-              All patch versions for{" "}
-              <span className="text-text font-semibold">{currentVideoTitle}</span>
+              All patch versions and rollback states for{" "}
+              <span className="text-text font-semibold">{currentVideoTitle || "Uploaded Video"}</span>
             </p>
           </div>
           <div className="flex items-center gap-3 shrink-0">
             <span className="text-xs font-mono text-muted bg-surface border border-border px-2.5 py-1 rounded-lg">
-              {patchHistory.length} versions
+              {timeline.length} versions
             </span>
             <Link
               to="/create-patch"
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-primary to-purple-600 hover:from-primary-hover hover:to-purple-700 text-white font-semibold text-sm shadow-glow transition-all active:scale-[0.98]"
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-primary to-purple-600 hover:from-primary-hover text-white font-semibold text-sm shadow-glow transition-all active:scale-[0.98]"
             >
               <Plus className="w-4 h-4" /> New Patch
             </Link>
@@ -80,251 +93,195 @@ export default function HistoryPage() {
         </div>
       </motion.div>
 
-      {/* Timeline */}
-      <motion.div variants={itemVariants} className="relative">
-        {/* Vertical connector */}
-        <div className="absolute left-5 top-8 bottom-8 w-0.5 bg-gradient-to-b from-primary/60 via-border/60 to-transparent" />
+      {/* Loading State */}
+      {isLoading && (
+        <motion.div variants={itemVariants} className="glass-card rounded-2xl p-12 border border-border flex flex-col items-center justify-center space-y-4 text-center">
+          <Loader2 className="w-8 h-8 text-primary animate-spin" />
+          <p className="text-sm font-semibold text-text">Loading version history...</p>
+        </motion.div>
+      )}
 
-        <div className="space-y-5">
-          {patchHistory.map((entry, idx) => {
-            const isLatest = idx === patchHistory.length - 1;
-            const isExpanded = expanded === entry.id;
-            const isOriginal = entry.occurrences === 0;
-            const extras = MOCK_EXTRAS[entry.id];
+      {/* Error State */}
+      {!isLoading && error && (
+        <motion.div variants={itemVariants} className="glass-card rounded-2xl p-8 border border-rose-500/30 bg-rose-500/5 space-y-3 text-center">
+          <AlertCircle className="w-8 h-8 text-rose-400 mx-auto" />
+          <h2 className="text-lg font-bold text-text">Unable to load version history</h2>
+          <p className="text-xs text-muted max-w-md mx-auto">{error}</p>
+        </motion.div>
+      )}
 
-            // Dynamic confidence for any new patch entries (from Zustand)
-            const confidence = extras?.confidence ?? 98.4;
-            const processingTime = extras?.processingTime ?? "3.8s";
+      {/* No Video Selected */}
+      {!isLoading && !error && !currentVideoId && (
+        <motion.div variants={itemVariants} className="glass-card rounded-2xl p-12 border border-border flex flex-col items-center justify-center space-y-4 text-center">
+          <Film className="w-10 h-10 text-primary opacity-60" />
+          <h2 className="text-lg font-bold text-text">No active video selected</h2>
+          <p className="text-xs text-muted max-w-md">Please import or select a video asset to view its patch timeline history.</p>
+          <Link
+            to="/import"
+            className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-primary to-purple-600 text-white text-xs font-semibold shadow-glow"
+          >
+            Import Video Asset
+          </Link>
+        </motion.div>
+      )}
 
-            return (
-              <motion.div
-                key={entry.id}
-                initial={{ opacity: 0, x: -10 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: idx * 0.07 }}
-                className="relative pl-12"
-              >
-                {/* Timeline Node */}
-                <div
-                  className={`absolute left-3.5 top-5 w-4 h-4 rounded-full border-2 flex items-center justify-center transition-all ${
-                    isLatest
-                      ? "bg-primary border-primary shadow-glow"
-                      : isOriginal
-                      ? "bg-surface border-border/60"
-                      : "bg-emerald-500 border-emerald-500"
-                  }`}
+      {/* Empty Timeline State */}
+      {!isLoading && !error && currentVideoId && timeline.length === 0 && (
+        <motion.div variants={itemVariants} className="glass-card rounded-2xl p-12 border border-border flex flex-col items-center justify-center space-y-4 text-center">
+          <History className="w-10 h-10 text-muted opacity-60" />
+          <h2 className="text-lg font-bold text-text">No versions recorded yet</h2>
+          <p className="text-xs text-muted max-w-md">Create your first patch to build out the version history timeline for this video asset.</p>
+          <Link
+            to="/create-patch"
+            className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-primary to-purple-600 text-white text-xs font-semibold shadow-glow"
+          >
+            Create First Patch
+          </Link>
+        </motion.div>
+      )}
+
+      {/* Timeline List */}
+      {!isLoading && !error && timeline.length > 0 && (
+        <motion.div variants={itemVariants} className="relative">
+          {/* Vertical connector */}
+          <div className="absolute left-5 top-8 bottom-8 w-0.5 bg-gradient-to-b from-primary/60 via-border/60 to-transparent" />
+
+          <div className="space-y-5">
+            {timeline.map((entry, idx) => {
+              const isLatest = idx === timeline.length - 1;
+              const patchId = entry.patch_id || (entry.id && entry.id !== "original" ? entry.id : null);
+              const entryKey = patchId || `v-${entry.version || idx}`;
+              const isExpanded = expanded === entryKey;
+              const isOriginal = entry.type === "initial_upload" || entry.status === "original" || entry.id === "original";
+              const isReverted = entry.status === "reverted";
+              const promptText = entry.prompt || entry.command || entry.summary || "Baseline Version";
+              const timestamp = entry.applied_at || entry.date || "";
+              const occurrences = entry.occurrences_changed ?? entry.occurrences ?? 0;
+              const typeLabel = entry.type || (isOriginal ? "initial_upload" : "patch");
+
+              return (
+                <motion.div
+                  key={entryKey}
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: idx * 0.05 }}
+                  className="relative pl-12"
                 >
-                  {isLatest && (
-                    <div className="w-1.5 h-1.5 rounded-full bg-white animate-ping" />
-                  )}
-                </div>
-
-                {/* Version Label Row */}
-                <div className="flex items-center gap-2 mb-2">
-                  <span
-                    className={`text-xs font-mono font-bold px-2.5 py-0.5 rounded-md ${
+                  {/* Timeline node */}
+                  <div
+                    className={`absolute left-2.5 top-5 -translate-x-1/2 w-6 h-6 rounded-full flex items-center justify-center border text-xs shadow-glow transition-all ${
                       isLatest
-                        ? "bg-primary/20 text-primary border border-primary/40"
-                        : "bg-surface text-muted border border-border"
+                        ? "bg-primary text-white border-primary ring-4 ring-primary/20 scale-110"
+                        : isReverted
+                        ? "bg-rose-500/20 text-rose-400 border-rose-500/30"
+                        : "bg-surface text-muted border-border"
                     }`}
                   >
-                    {entry.version}
-                  </span>
-                  {isLatest && (
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
-                      <span className="w-1 h-1 rounded-full bg-emerald-400 animate-pulse" />
-                      Latest
-                    </span>
-                  )}
-                  {isOriginal && (
-                    <span className="text-[10px] font-medium text-muted">
-                      Original Upload
-                    </span>
-                  )}
-                  {!isOriginal && (
-                    <span className="text-[11px] text-muted/70 font-mono">
-                      {entry.date}
-                    </span>
-                  )}
-                </div>
+                    {isOriginal ? (
+                      <FileCode2 className="w-3.5 h-3.5" />
+                    ) : (
+                      <Zap className="w-3.5 h-3.5" />
+                    )}
+                  </div>
 
-                {/* Main Expandable Card */}
-                <div className="glass-card rounded-2xl border border-border overflow-hidden shadow-xl">
-                  {/* Card Header / Click to Expand */}
-                  <button
-                    type="button"
-                    onClick={() => setExpanded(isExpanded ? null : entry.id)}
-                    className="w-full text-left flex items-center justify-between p-4 md:p-5 hover:bg-white/[0.02] transition-colors"
-                  >
-                    <div className="flex items-center gap-3.5">
-                      <div
-                        className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
-                          isOriginal
-                            ? "bg-surface text-muted border border-border"
-                            : isLatest
-                            ? "bg-primary/20 text-primary border border-primary/40 shadow-glow"
-                            : "bg-emerald-500/10 text-emerald-400 border border-emerald-500/30"
-                        }`}
-                      >
-                        {isOriginal ? (
-                          <Layers className="w-5 h-5" />
+                  {/* Card */}
+                  <div className={`glass-card rounded-2xl border transition-all ${isLatest ? "border-primary/40 shadow-glow" : "border-border"}`}>
+                    <button
+                      type="button"
+                      onClick={() => setExpanded(isExpanded ? null : entryKey)}
+                      className="w-full p-5 text-left flex items-center justify-between gap-4"
+                    >
+                      <div className="space-y-1 truncate">
+                        <div className="flex items-center gap-2">
+                          <span className="px-2 py-0.5 rounded text-[11px] font-bold font-mono bg-primary/20 text-primary border border-primary/30">
+                            {entry.version}
+                          </span>
+                          {isLatest && (
+                            <span className="px-2 py-0.5 rounded text-[10px] font-semibold uppercase bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                              Active Baseline
+                            </span>
+                          )}
+                          {isReverted && (
+                            <span className="px-2 py-0.5 rounded text-[10px] font-semibold uppercase bg-rose-500/10 text-rose-400 border border-rose-500/20">
+                              Reverted
+                            </span>
+                          )}
+                          {timestamp && <span className="text-xs text-muted font-mono">{timestamp}</span>}
+                        </div>
+                        <p className="font-bold text-text text-sm truncate">{promptText}</p>
+                      </div>
+
+                      <div className="flex items-center gap-3 shrink-0">
+                        <span className="text-xs text-muted font-medium hidden sm:inline-block">
+                          {entry.author || "System User"}
+                        </span>
+                        {isExpanded ? (
+                          <ChevronDown className="w-4 h-4 text-muted" />
                         ) : (
-                          <CheckCircle2 className="w-5 h-5" />
+                          <ChevronRight className="w-4 h-4 text-muted" />
                         )}
                       </div>
+                    </button>
 
-                      <div className="space-y-0.5">
-                        <p className="text-sm font-bold text-text leading-tight">
-                          {isOriginal ? "Original Upload" : `Patch #${idx} — ${entry.version}`}
-                        </p>
-                        <p className="text-xs text-muted truncate max-w-sm leading-snug">
-                          {isOriginal
-                            ? "Initial video asset — no patches applied"
-                            : entry.summary}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-3 shrink-0">
-                      {!isOriginal && (
-                        <span
-                          className={`hidden sm:inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full border ${
-                            entry.status === "applied"
-                              ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
-                              : "bg-amber-500/10 text-amber-400 border-amber-500/20"
-                          }`}
+                    {/* Expanded detail */}
+                    <AnimatePresence>
+                      {isExpanded && (
+                        <motion.div
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: "auto" }}
+                          exit={{ opacity: 0, height: 0 }}
+                          className="px-5 pb-5 pt-2 border-t border-border/50 space-y-4 text-xs"
                         >
-                          <CheckCircle2 className="w-3 h-3" />
-                          {entry.status === "applied" ? "Applied" : "Pending"}
-                        </span>
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-surface p-3.5 rounded-xl border border-border">
+                            <div>
+                              <span className="text-muted block font-semibold">Changes</span>
+                              <span className="font-mono text-text">{occurrences} matches</span>
+                            </div>
+                            <div>
+                              <span className="text-muted block font-semibold">Author</span>
+                              <span className="text-text">{entry.author || "System User"}</span>
+                            </div>
+                            <div>
+                              <span className="text-muted block font-semibold">Status</span>
+                              <span className="font-semibold text-emerald-400 capitalize">{entry.status}</span>
+                            </div>
+                            <div>
+                              <span className="text-muted block font-semibold">Type</span>
+                              <span className="font-mono text-primary uppercase">{typeLabel}</span>
+                            </div>
+                          </div>
+
+                          {/* Actions */}
+                          <div className="flex items-center justify-between gap-3 pt-2">
+                            {patchId && currentVideoId && (
+                              <button
+                                onClick={() => exportService.downloadPatchReport(currentVideoId, patchId)}
+                                className="inline-flex items-center gap-1.5 text-xs text-primary font-semibold hover:underline"
+                              >
+                                <BarChart3 className="w-3.5 h-3.5" /> Download Patch Report
+                              </button>
+                            )}
+                            {patchId && entry.status === "applied" && (
+                              <button
+                                onClick={() => handleRevert(patchId)}
+                                disabled={revertingId === patchId}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 text-xs font-semibold transition"
+                              >
+                                <RotateCcw className="w-3.5 h-3.5" />
+                                {revertingId === patchId ? "Reverting..." : "Revert Patch"}
+                              </button>
+                            )}
+                          </div>
+                        </motion.div>
                       )}
-                      {isExpanded ? (
-                        <ChevronDown className="w-4 h-4 text-muted" />
-                      ) : (
-                        <ChevronRight className="w-4 h-4 text-muted" />
-                      )}
-                    </div>
-                  </button>
-
-                  {/* Expanded Details */}
-                  <AnimatePresence>
-                    {isExpanded && !isOriginal && (
-                      <motion.div
-                        initial={{ opacity: 0, height: 0 }}
-                        animate={{ opacity: 1, height: "auto" }}
-                        exit={{ opacity: 0, height: 0 }}
-                        className="border-t border-border overflow-hidden"
-                      >
-                        <div className="p-5 space-y-5">
-                          {/* Metadata Grid */}
-                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                            <div className="p-3 rounded-xl bg-surface/60 border border-border space-y-1">
-                              <span className="text-[10px] font-semibold text-muted uppercase tracking-wider flex items-center gap-1">
-                                <Calendar className="w-3 h-3" /> Timestamp
-                              </span>
-                              <p className="text-xs font-semibold text-text">{entry.date}</p>
-                            </div>
-
-                            <div className="p-3 rounded-xl bg-surface/60 border border-border space-y-1">
-                              <span className="text-[10px] font-semibold text-muted uppercase tracking-wider flex items-center gap-1">
-                                <User className="w-3 h-3" /> Author
-                              </span>
-                              <p className="text-xs font-semibold text-text">{entry.author}</p>
-                            </div>
-
-                            <div className="p-3 rounded-xl bg-surface/60 border border-border space-y-1">
-                              <span className="text-[10px] font-semibold text-muted uppercase tracking-wider flex items-center gap-1">
-                                <ShieldCheck className="w-3 h-3" /> Confidence
-                              </span>
-                              <p className="text-xs font-semibold text-emerald-400">{confidence}%</p>
-                            </div>
-
-                            <div className="p-3 rounded-xl bg-surface/60 border border-border space-y-1">
-                              <span className="text-[10px] font-semibold text-muted uppercase tracking-wider flex items-center gap-1">
-                                <Clock className="w-3 h-3" /> Process Time
-                              </span>
-                              <p className="text-xs font-semibold text-text">{processingTime}</p>
-                            </div>
-                          </div>
-
-                          {/* Occurrences Row */}
-                          <div className="flex items-center gap-3 text-xs">
-                            <Zap className="w-3.5 h-3.5 text-primary shrink-0" />
-                            <span className="text-muted">Occurrences replaced:</span>
-                            <span className="text-text font-bold">{entry.occurrences}</span>
-                          </div>
-
-                          {/* Patch Command */}
-                          <div className="space-y-1.5">
-                            <p className="text-[10px] font-semibold text-muted uppercase tracking-wider flex items-center gap-1">
-                              <FileCode2 className="w-3 h-3 text-primary" /> Patch Command
-                            </p>
-                            <div className="font-mono text-xs bg-black/40 border border-white/10 px-3 py-2.5 rounded-xl text-text/90 break-all">
-                              "{entry.command}"
-                            </div>
-                          </div>
-
-                          {/* Asset Badges */}
-                          {entry.assetsAffected.length > 0 && (
-                            <div className="space-y-1.5">
-                              <p className="text-[10px] font-semibold text-muted uppercase tracking-wider flex items-center gap-1">
-                                <Tag className="w-3 h-3 text-primary" /> Assets Patched
-                              </p>
-                              <div className="flex flex-wrap gap-2">
-                                {entry.assetsAffected.map((a) => (
-                                  <span
-                                    key={a}
-                                    className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-primary/10 text-primary border border-primary/20"
-                                  >
-                                    {a}
-                                  </span>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-
-                          {/* Action Buttons Row */}
-                          <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-border/50">
-                            {/* View Report */}
-                            <Link
-                              to="/report"
-                              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-primary/10 hover:bg-primary/20 text-primary border border-primary/30 text-xs font-semibold transition-all"
-                            >
-                              <BarChart3 className="w-3.5 h-3.5" />
-                              View Report
-                              <ArrowUpRight className="w-3 h-3" />
-                            </Link>
-
-                            {/* Preview Changes */}
-                            <Link
-                              to="/patch/preview"
-                              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl glass-card hover:bg-white/10 text-text border border-border text-xs font-semibold transition-all"
-                            >
-                              <Eye className="w-3.5 h-3.5 text-primary" />
-                              Preview Changes
-                            </Link>
-
-                            {/* Restore Version — Disabled */}
-                            <button
-                              type="button"
-                              disabled
-                              title="Restore is not available for the latest version"
-                              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-surface text-muted border border-border/50 text-xs font-semibold cursor-not-allowed opacity-40 select-none"
-                            >
-                              <RotateCcw className="w-3.5 h-3.5" />
-                              Restore Version
-                            </button>
-                          </div>
-                        </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
-              </motion.div>
-            );
-          })}
-        </div>
-      </motion.div>
+                    </AnimatePresence>
+                  </div>
+                </motion.div>
+              );
+            })}
+          </div>
+        </motion.div>
+      )}
     </motion.div>
   );
 }

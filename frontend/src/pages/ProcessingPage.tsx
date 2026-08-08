@@ -1,6 +1,10 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
+import toast from "react-hot-toast";
+import { usePatchStore } from "../store/usePatchStore";
+import { processingService } from "../services/processingService";
+import { transcriptionService } from "../services/transcriptionService";
 import {
   CheckCircle2,
   Loader2,
@@ -15,7 +19,8 @@ import {
   Film,
   Zap,
   Check,
-  Clock
+  Clock,
+  AlertCircle
 } from "lucide-react";
 
 interface ProcessingStep {
@@ -27,49 +32,93 @@ interface ProcessingStep {
 }
 
 const STEPS: ProcessingStep[] = [
-  { id: "upload", label: "Upload Complete", description: "Video asset buffered & verified", detail: "245.8 MB • SHA-256 Verified", icon: FileCheck },
-  { id: "audio", label: "Extracting Audio", description: "Separating high-fidelity audio stream", detail: "AAC 320kbps • 48kHz Stereo", icon: Music },
-  { id: "transcript", label: "Generating Transcript", description: "AI speech-to-text alignment", detail: "984 words • 99.2% accuracy", icon: FileText },
-  { id: "captions", label: "Creating Captions", description: "Generating time-indexed WebVTT captions", detail: "142 cues • Auto-synced", icon: Subtitles },
-  { id: "metadata", label: "Preparing Metadata", description: "Indexing frames for patch injection", detail: "240 keyframes indexed", icon: Database },
-  { id: "ready", label: "Ready", description: "Video asset ready for patch creation", detail: "v1.0 Baseline created", icon: Sparkles },
+  { id: "upload", label: "Upload Verified", description: "Video asset buffered & stored", detail: "FastAPI Upload Service", icon: FileCheck },
+  { id: "audio", label: "FFmpeg Audio Extraction", description: "16kHz PCM WAV audio extracted", detail: "FFmpeg Audio Pipeline", icon: Music },
+  { id: "metadata", label: "FFprobe Metadata Indexing", description: "Resolution, duration, and thumbnail indexed", detail: "FFprobe Extraction Engine", icon: Database },
+  { id: "transcript", label: "Generating Transcript", description: "Whisper speech-to-text alignment", detail: "OpenAI Whisper AI", icon: FileText },
+  { id: "captions", label: "Creating SRT Captions", description: "Generating time-indexed captions", detail: "SRT Timestamp Sync", icon: Subtitles },
+  { id: "ready", label: "Asset Ready", description: "Video asset ready for patch creation", detail: "v1.0 Baseline created", icon: Sparkles },
 ];
 
 export default function ProcessingPage() {
   const navigate = useNavigate();
+  const { currentVideoId, setMetadata, setTranscript } = usePatchStore();
   const [completedStepIndex, setCompletedStepIndex] = useState(-1);
-  const [progress, setProgress] = useState(5);
+  const [progress, setProgress] = useState(15);
   const [isFinished, setIsFinished] = useState(false);
   const [countdown, setCountdown] = useState(3);
+  const [error, setError] = useState<string | null>(null);
+
+  // Guard: if no video is selected, redirect — in its own effect so navigate
+  // never fires synchronously during render (avoids BrowserRouter warning).
+  useEffect(() => {
+    if (!currentVideoId) {
+      toast.error("No active video found. Please upload a video first.");
+      navigate("/import");
+    }
+  }, [currentVideoId, navigate]);
+
+  // Ref ensures the pipeline runs exactly once per mount even under
+  // React 18 StrictMode which double-invokes effects in development.
+  const hasRunRef = useRef(false);
 
   useEffect(() => {
-    // Step completion timer
-    let stepIdx = 0;
-    const stepInterval = setInterval(() => {
-      setCompletedStepIndex(stepIdx);
-      stepIdx += 1;
-      if (stepIdx >= STEPS.length) {
-        clearInterval(stepInterval);
-      }
-    }, 750);
+    // Skip if no video or pipeline already started
+    if (!currentVideoId || hasRunRef.current) return;
+    hasRunRef.current = true;
 
-    // Smooth progress bar timer
-    const progressInterval = setInterval(() => {
-      setProgress((prev) => {
-        if (prev >= 100) {
-          clearInterval(progressInterval);
-          setIsFinished(true);
-          return 100;
-        }
-        return prev + 3;
-      });
-    }, 120);
+    let isMounted = true;
+
+    async function runBackendPipeline() {
+      try {
+        setError(null);
+        // Step 1: POST /process (Audio + Thumbnail + Metadata extraction)
+        setCompletedStepIndex(0);
+        setProgress(20);
+
+        const meta = await processingService.processVideo(currentVideoId!);
+        if (!isMounted) return;
+        setMetadata(meta);
+        setCompletedStepIndex(2);
+        setProgress(50);
+
+        // Step 2: POST /transcribe (Whisper AI speech-to-text)
+        const trans = await transcriptionService.transcribeVideo(currentVideoId!);
+        if (!isMounted) return;
+        setTranscript(trans);
+        setCompletedStepIndex(4);
+        setProgress(80);
+
+        // Step 3: GET /metadata & GET /transcript (verify persisted endpoints after process & transcribe 200)
+        const store = usePatchStore.getState();
+        await Promise.all([
+          store.fetchMetadata(currentVideoId!),
+          store.fetchTranscript(currentVideoId!),
+        ]);
+        if (!isMounted) return;
+
+        setCompletedStepIndex(5);
+        setProgress(100);
+        setIsFinished(true);
+        toast.success("Video processing & transcription complete!");
+      } catch (err: any) {
+        if (!isMounted) return;
+        const msg = err.message || "Failed to process video";
+        setError(msg);
+        toast.error(msg);
+      }
+    }
+
+    runBackendPipeline();
 
     return () => {
-      clearInterval(stepInterval);
-      clearInterval(progressInterval);
+      isMounted = false;
     };
-  }, []);
+    // Only re-run if the video ID itself changes; Zustand actions and
+    // navigate are stable references and must NOT be deps here — adding
+    // them would re-trigger the pipeline on every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentVideoId]);
 
   // Automatic redirect countdown when finished
   useEffect(() => {
@@ -78,7 +127,7 @@ export default function ProcessingPage() {
       setCountdown((prev) => {
         if (prev <= 1) {
           clearInterval(timer);
-          navigate("/video/vid-1");
+          navigate(currentVideoId ? `/video/${currentVideoId}` : "/dashboard");
           return 0;
         }
         return prev - 1;
@@ -86,7 +135,7 @@ export default function ProcessingPage() {
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [isFinished, navigate]);
+  }, [isFinished, currentVideoId, navigate]);
 
   return (
     <div className="max-w-3xl mx-auto space-y-8 py-6 pb-16">
@@ -103,14 +152,16 @@ export default function ProcessingPage() {
           <div className="space-y-1.5">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/15 border border-primary/30 text-xs font-semibold text-primary shadow-glow">
               <Cpu className="w-3.5 h-3.5" />
-              <span>Simulated Backend Pipeline</span>
+              <span>Live FastAPI Backend Pipeline</span>
               <span className="w-1.5 h-1.5 rounded-full bg-primary animate-ping" />
             </div>
             <h1 className="text-2xl md:text-3xl font-extrabold text-text tracking-tight">
-              {isFinished ? "Processing Complete!" : "Processing Video Asset..."}
+              {error ? "Processing Failed" : isFinished ? "Processing Complete!" : "Processing Video Asset..."}
             </h1>
             <p className="text-muted text-sm">
-              {isFinished
+              {error
+                ? error
+                : isFinished
                 ? "All asset streams, transcripts, and keyframe markers are fully prepared."
                 : "PatchFlow is analyzing timestamps, extracting transcripts, and indexing frames."}
             </p>
@@ -303,7 +354,7 @@ export default function ProcessingPage() {
               </div>
 
               <button
-                onClick={() => navigate("/video/vid-1")}
+                onClick={() => navigate(currentVideoId ? `/video/${currentVideoId}` : "/dashboard")}
                 className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-black font-extrabold text-xs transition-all shadow-glow flex items-center justify-center gap-2 shrink-0 active:scale-[0.98]"
               >
                 <span>Go to Video Details</span>
