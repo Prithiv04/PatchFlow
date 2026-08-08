@@ -14,6 +14,7 @@ export const usePatchStore = create((set, get) => ({
     metadata: null,
     transcript: null,
     activePatch: null,
+    patches: [],
     historyTimeline: [],
     patchReport: null,
     isLoading: false,
@@ -41,6 +42,7 @@ export const usePatchStore = create((set, get) => ({
     setTranscript: (transcript) => set({ transcript }),
     setPatchCommand: (cmd) => set({ currentPatchCommand: cmd }),
     setActivePatch: (patch) => set({ activePatch: patch }),
+    setPatches: (patches) => set({ patches }),
     setPatchReport: (report) => set({ patchReport: report }),
     setError: (err) => set({ error: err }),
     fetchMetadata: async (videoId) => {
@@ -105,6 +107,22 @@ export const usePatchStore = create((set, get) => ({
             return null;
         }
     },
+    // Fetch patches for current video
+    fetchPatches: async (videoId) => {
+        const id = videoId || get().currentVideoId;
+        if (!id)
+            return null;
+        try {
+            set({ isLoading: true, error: null });
+            const patches = await patchService.getPatches(id);
+            set({ patches, isLoading: false });
+            return patches;
+        }
+        catch (err) {
+            set({ patches: [], error: err.message || "Failed to fetch patches", isLoading: false });
+            return null;
+        }
+    },
     resetStore: () => {
         localStorage.removeItem(SAVED_VIDEO_ID_KEY);
         localStorage.removeItem(SAVED_VIDEO_TITLE_KEY);
@@ -116,6 +134,7 @@ export const usePatchStore = create((set, get) => ({
             metadata: null,
             transcript: null,
             activePatch: null,
+            patches: [],
             historyTimeline: [],
             patchReport: null,
             isLoading: false,

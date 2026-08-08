@@ -11,6 +11,7 @@ import PreviewPage from '@/pages/PreviewPage';
 import ApplyPatchPage from '@/pages/ApplyPatchPage';
 import HistoryPage from '@/pages/HistoryPage';
 import ReportPage from '@/pages/ReportPage';
+import PatchesPage from '@/pages/PatchesPage';
 
 function App() {
   return (
@@ -35,7 +36,7 @@ function App() {
             <Route path="/patch/create" element={<CreatePatchPage />} />
             <Route path="/patch/preview" element={<PreviewPage />} />
             <Route path="/patch/apply" element={<ApplyPatchPage />} />
-
+            <Route path="/patches" element={<PatchesPage />} />
             {/* Impact Analysis */}
             <Route path="/patch/impact" element={<ImpactAnalysisPage />} />
             <Route path="/impact-analysis" element={<ImpactAnalysisPage />} />
